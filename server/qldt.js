@@ -171,5 +171,3 @@ export async function fetchQldtSchedule(username, password, options = {}) {
   }, limits)
   return parseExport(exported)
 }
-
-export const qldtConnectionNotice = 'QLĐT chỉ hỗ trợ HTTP: kết nối từ server ứng dụng tới QLĐT không được mã hóa.'

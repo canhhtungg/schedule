@@ -50,10 +50,10 @@ function periodTime(value) {
   return PERIOD_TIMES[periods] || `Tiết ${periods}`
 }
 
-function makeEvent({ date, code, title, periods, room }, index) {
+function makeEvent({ date, code, title, periods, room, teacher }, index) {
   const time = periodTime(periods)
   const id = createHash('sha256').update(`${date}|${code}|${title}|${time}|${room}`).digest('hex').slice(0, 16)
-  return { id, date, title, code, time, room: clean(room) || 'Chưa rõ', teacher: 'Chưa rõ', color: COLORS[index % COLORS.length] }
+  return { id, date, title, code, time, room: clean(room), teacher: clean(teacher), color: COLORS[index % COLORS.length] }
 }
 
 function nearbySubject(worksheet, row) {
@@ -64,6 +64,28 @@ function nearbySubject(worksheet, row) {
     if (value && !/^Từ\s+\d/i.test(value)) return value
   }
   return 'Học phần'
+}
+
+function nearbyTeacher(worksheet, row) {
+  for (let currentRow = row; currentRow >= Math.max(1, row - 2); currentRow -= 1) {
+    for (let column = 0; column < 26; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: currentRow - 1, c: column })
+      const value = clean(worksheet[address]?.v)
+      const labeled = value.match(/(?:giảng\s*viên|giáo\s*viên|\bGV)\s*[:：-]\s*(.+)/i)
+      if (labeled?.[1]) return clean(labeled[1])
+    }
+  }
+
+  for (let headerRow = Math.max(1, row - 8); headerRow < row; headerRow += 1) {
+    for (let column = 0; column < 26; column += 1) {
+      const headerAddress = XLSX.utils.encode_cell({ r: headerRow - 1, c: column })
+      if (!/^(?:giảng\s*viên|giáo\s*viên|GV)$/i.test(clean(worksheet[headerAddress]?.v))) continue
+      const valueAddress = XLSX.utils.encode_cell({ r: row - 1, c: column })
+      const value = clean(worksheet[valueAddress]?.v)
+      if (value) return value
+    }
+  }
+  return ''
 }
 
 function scheduleBlocks(value) {
@@ -90,6 +112,7 @@ export function parseTimetableWorkbook(bytes) {
     if (!/Từ\s+\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4}\s+đến/i.test(value)) continue
     const row = Number(address.match(/\d+/)?.[0])
     const { code, title } = splitSubject(nearbySubject(worksheet, row))
+    const teacher = nearbyTeacher(worksheet, row)
 
     for (const block of scheduleBlocks(value)) {
       const start = parseVietnameseDate(block.start)
@@ -99,7 +122,7 @@ export function parseTimetableWorkbook(bytes) {
         const weekday = weekdayNumber(detail.day)
         if (weekday === null) continue
         for (const date of datesForWeekday(start, end, weekday)) {
-          events.push(makeEvent({ date, code, title, periods: detail.periods, room: detail.room }, events.length))
+          events.push(makeEvent({ date, code, title, periods: detail.periods, room: detail.room, teacher }, events.length))
         }
       }
     }

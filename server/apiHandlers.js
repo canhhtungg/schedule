@@ -1,6 +1,11 @@
-import { fetchQldtSchedule, QldtError, qldtConnectionNotice } from './qldt.js'
+import { fetchQldtSchedule, QldtError } from './qldt.js'
+import { parseTimetableHtml } from './parser.js'
+import { parseTimetableWorkbook } from './workbookParser.js'
 
-export const MAX_REQUEST_BODY_BYTES = 8 * 1024
+export const MAX_LOGIN_BODY_BYTES = 8 * 1024
+export const MAX_HTML_BYTES = 1024 * 1024
+export const MAX_EXCEL_BYTES = 3 * 1024 * 1024
+export const MAX_IMPORT_BODY_BYTES = Math.ceil(MAX_EXCEL_BYTES * 4 / 3) + 16 * 1024
 
 const API_HEADERS = {
   'cache-control': 'no-store, max-age=0',
@@ -31,31 +36,31 @@ function header(request, name) {
   return Array.isArray(value) ? value[0] : value
 }
 
-function assertBodySize(body) {
+function assertBodySize(body, maxBytes) {
   let encoded
   try {
     encoded = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)
   } catch {
     throw new ApiError(400, 'INVALID_JSON', 'Dữ liệu gửi lên không hợp lệ.')
   }
-  if (Buffer.byteLength(encoded || '') > MAX_REQUEST_BODY_BYTES) {
+  if (Buffer.byteLength(encoded || '') > maxBytes) {
     throw new ApiError(413, 'REQUEST_TOO_LARGE', 'Yêu cầu vượt quá giới hạn cho phép.')
   }
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes) {
   const contentType = header(request, 'content-type') || ''
   if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
     throw new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type phải là application/json.')
   }
 
   const declaredLength = Number(header(request, 'content-length'))
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
     throw new ApiError(413, 'REQUEST_TOO_LARGE', 'Yêu cầu vượt quá giới hạn cho phép.')
   }
 
   if (request.body !== undefined) {
-    assertBodySize(request.body)
+    assertBodySize(request.body, maxBytes)
     if (request.body === null || Array.isArray(request.body) || typeof request.body !== 'object') {
       throw new ApiError(400, 'INVALID_JSON', 'Dữ liệu gửi lên phải là một JSON object.')
     }
@@ -66,9 +71,7 @@ async function readJson(request) {
   let size = 0
   for await (const chunk of request) {
     size += chunk.length
-    if (size > MAX_REQUEST_BODY_BYTES) {
-      throw new ApiError(413, 'REQUEST_TOO_LARGE', 'Yêu cầu vượt quá giới hạn cho phép.')
-    }
+    if (size > maxBytes) throw new ApiError(413, 'REQUEST_TOO_LARGE', 'Yêu cầu vượt quá giới hạn cho phép.')
     chunks.push(chunk)
   }
 
@@ -87,15 +90,21 @@ function sendJson(response, status, payload, extraHeaders = {}) {
   response.end(JSON.stringify(payload))
 }
 
-function demoEvents(now = new Date()) {
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  return [
-    { id: 'demo-1', date: `${year}-${month}-03`, title: 'Cấu trúc dữ liệu', code: 'CS204', time: '07:30 – 09:20', room: 'A-302', teacher: 'GV. Minh Anh', color: 'violet' },
-    { id: 'demo-2', date: `${year}-${month}-03`, title: 'Tiếng Anh chuyên ngành', code: 'EN310', time: '13:00 – 14:50', room: 'B-205', teacher: 'GV. Thu Hà', color: 'amber' },
-    { id: 'demo-3', date: `${year}-${month}-12`, title: 'An toàn hệ thống', code: 'SE301', time: '07:30 – 10:20', room: 'A-405', teacher: 'GV. Đức Long', color: 'green' },
-    { id: 'demo-4', date: `${year}-${month}-19`, title: 'Phát triển Web', code: 'WEB302', time: '07:30 – 10:20', room: 'Lab 2', teacher: 'GV. Quang Huy', color: 'blue' },
-  ]
+function sendKnownError(response, error, fallbackMessage) {
+  if (error instanceof ApiError || error instanceof QldtError) {
+    return sendJson(response, error.status, { code: error.code, message: error.message })
+  }
+  return sendJson(response, 500, { code: 'INTERNAL_ERROR', message: fallbackMessage })
+}
+
+function strictBase64(value) {
+  if (typeof value !== 'string' || !value || value.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+    throw new ApiError(400, 'INVALID_BASE64', 'Nội dung Excel phải là base64 hợp lệ.')
+  }
+  const bytes = Buffer.from(value, 'base64')
+  if (bytes.toString('base64') !== value) throw new ApiError(400, 'INVALID_BASE64', 'Nội dung Excel phải là base64 hợp lệ.')
+  if (bytes.byteLength > MAX_EXCEL_BYTES) throw new ApiError(413, 'EXCEL_TOO_LARGE', 'File Excel sau giải mã không được vượt quá 3 MB.')
+  return bytes
 }
 
 export function createHealthHandler() {
@@ -109,7 +118,6 @@ export function createHealthHandler() {
 
 export function createScheduleHandler({
   fetchSchedule = fetchQldtSchedule,
-  now = () => new Date(),
   timeoutMs = positiveInt(process.env.QLDT_TIMEOUT_MS, 12_000),
   maxBodyBytes = positiveInt(process.env.QLDT_MAX_BODY_BYTES, 8 * 1024 * 1024),
 } = {}) {
@@ -118,46 +126,64 @@ export function createScheduleHandler({
     let password = ''
 
     try {
-      if (request.method !== 'POST') {
-        return sendJson(response, 405, { code: 'METHOD_NOT_ALLOWED', message: 'Phương thức không được hỗ trợ.' }, { allow: 'POST' })
-      }
+      if (request.method !== 'POST') return sendJson(response, 405, { code: 'METHOD_NOT_ALLOWED', message: 'Phương thức không được hỗ trợ.' }, { allow: 'POST' })
 
-      body = await readJson(request)
-      const mode = body.mode === undefined ? 'qldt' : body.mode
+      body = await readJson(request, MAX_LOGIN_BODY_BYTES)
       const username = typeof body.username === 'string' ? body.username.trim() : ''
       password = typeof body.password === 'string' ? body.password : ''
 
-      if (mode !== 'qldt' && mode !== 'demo') {
-        throw new ApiError(400, 'INVALID_INPUT', 'Chế độ đăng nhập không hợp lệ.')
-      }
-      if (body.username !== undefined && typeof body.username !== 'string') {
-        throw new ApiError(400, 'INVALID_INPUT', 'Tài khoản phải là chuỗi ký tự.')
-      }
-      if (body.password !== undefined && typeof body.password !== 'string') {
-        throw new ApiError(400, 'INVALID_INPUT', 'Mật khẩu phải là chuỗi ký tự.')
-      }
-      if (username.length > 100 || password.length > 256) {
-        throw new ApiError(400, 'INVALID_INPUT', 'Thông tin đăng nhập vượt quá độ dài cho phép.')
-      }
-
-      if (mode === 'demo') {
-        return sendJson(response, 200, { mode, user: username || 'DEMO2026', events: demoEvents(now()), warnings: [] })
-      }
-      if (!username || !password) {
-        throw new ApiError(400, 'MISSING_CREDENTIALS', 'Vui lòng nhập đủ tài khoản và mật khẩu.')
-      }
+      if (body.username !== undefined && typeof body.username !== 'string') throw new ApiError(400, 'INVALID_INPUT', 'Tài khoản phải là chuỗi ký tự.')
+      if (body.password !== undefined && typeof body.password !== 'string') throw new ApiError(400, 'INVALID_INPUT', 'Mật khẩu phải là chuỗi ký tự.')
+      if (username.length > 100 || password.length > 256) throw new ApiError(400, 'INVALID_INPUT', 'Thông tin đăng nhập vượt quá độ dài cho phép.')
+      if (!username || !password) throw new ApiError(400, 'MISSING_CREDENTIALS', 'Vui lòng nhập đủ tài khoản và mật khẩu.')
 
       const events = await fetchSchedule(username, password, { timeoutMs, maxBodyBytes })
-      return sendJson(response, 200, { mode, user: username, events, warnings: [qldtConnectionNotice] })
+      return sendJson(response, 200, { mode: 'qldt', user: username, events })
     } catch (error) {
-      if (error instanceof ApiError || error instanceof QldtError) {
-        return sendJson(response, error.status, { code: error.code, message: error.message })
-      }
-      return sendJson(response, 500, { code: 'INTERNAL_ERROR', message: 'Không thể tải lịch học lúc này.' })
+      return sendKnownError(response, error, 'Không thể tải lịch học lúc này.')
     } finally {
       password = ''
       if (body && typeof body === 'object' && Object.hasOwn(body, 'password')) body.password = ''
       if (request.body && typeof request.body === 'object' && Object.hasOwn(request.body, 'password')) request.body.password = ''
+    }
+  }
+}
+
+export function createImportScheduleHandler({
+  parseHtml = parseTimetableHtml,
+  parseWorkbook = parseTimetableWorkbook,
+} = {}) {
+  return async function importScheduleHandler(request, response) {
+    try {
+      if (request.method !== 'POST') return sendJson(response, 405, { code: 'METHOD_NOT_ALLOWED', message: 'Phương thức không được hỗ trợ.' }, { allow: 'POST' })
+      const body = await readJson(request, MAX_IMPORT_BODY_BYTES)
+      let events
+      let user
+
+      if (body.sourceType === 'html') {
+        if (typeof body.content !== 'string' || !body.content.trim()) throw new ApiError(400, 'INVALID_INPUT', 'Vui lòng dán HTML thời khóa biểu.')
+        if (Buffer.byteLength(body.content, 'utf8') > MAX_HTML_BYTES) throw new ApiError(413, 'HTML_TOO_LARGE', 'Nội dung HTML không được vượt quá 1 MB.')
+        events = parseHtml(body.content)
+        user = 'HTML đã nhập'
+      } else if (body.sourceType === 'excel') {
+        if (typeof body.filename !== 'string' || !/\.(?:xls|xlsx)$/i.test(body.filename.trim())) throw new ApiError(400, 'INVALID_FILE', 'Chỉ chấp nhận file Excel .xls hoặc .xlsx.')
+        if (body.filename.length > 255) throw new ApiError(400, 'INVALID_FILE', 'Tên file quá dài.')
+        events = parseWorkbook(strictBase64(body.contentBase64))
+        user = body.filename.trim()
+      } else {
+        throw new ApiError(400, 'INVALID_SOURCE_TYPE', 'Nguồn nhập phải là HTML hoặc Excel.')
+      }
+
+      if (!Array.isArray(events) || events.length === 0) {
+        throw new ApiError(422, 'NO_SCHEDULE_EVENTS', 'Không tìm thấy sự kiện lịch học. Hãy dùng HTML của trang StudentTimeTable.aspx hoặc file Excel thời khóa biểu.')
+      }
+      return sendJson(response, 200, { mode: 'import', user, events })
+    } catch (error) {
+      if (error instanceof ApiError) return sendKnownError(response, error, 'Không thể nhập thời khóa biểu lúc này.')
+      if (error instanceof TypeError || error?.name === 'Error') {
+        return sendJson(response, 422, { code: 'IMPORT_PARSE_FAILED', message: 'Không thể đọc dữ liệu thời khóa biểu. Hãy kiểm tra lại file hoặc HTML.' })
+      }
+      return sendKnownError(response, error, 'Không thể nhập thời khóa biểu lúc này.')
     }
   }
 }

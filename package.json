@@ -1,5 +1,5 @@
 {
-  "name": "campus-planner-demo",
+  "name": "campus-planner",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -20,6 +20,7 @@
     "cheerio": "^1.2.0",
     "express": "^5.2.1",
     "fetch-cookie": "^3.2.0",
+    "lunar-javascript": "^1.7.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tough-cookie": "^6.0.2"

@@ -64,9 +64,9 @@ function finishEvent(raw, index) {
     date,
     title,
     code,
-    time: normalizeTime(raw.time) || 'Chưa rõ',
-    room: clean(raw.room) || 'Chưa rõ',
-    teacher: clean(raw.teacher) || 'Chưa rõ',
+    time: normalizeTime(raw.time),
+    room: clean(raw.room),
+    teacher: clean(raw.teacher),
   }
   return { id: eventId(event, index), ...event, color: COLORS[index % COLORS.length] }
 }

@@ -1,4 +1,4 @@
-const CACHE = 'campus-planner-v2'
+const CACHE = 'campus-planner-v3'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (event) => {

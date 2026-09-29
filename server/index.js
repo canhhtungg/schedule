@@ -2,7 +2,7 @@ import express from 'express'
 import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createHealthHandler, createScheduleHandler } from './apiHandlers.js'
+import { createHealthHandler, createImportScheduleHandler, createScheduleHandler } from './apiHandlers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -20,10 +20,13 @@ app.use((_, response, next) => {
   })
   next()
 })
-app.use(express.json({ limit: '8kb', strict: true }))
+// Import requests may contain a base64-encoded 3 MB workbook. Each handler still
+// enforces its own, narrower decoded/body limits.
+app.use(express.json({ limit: '5mb', strict: true }))
 
 app.get('/api/health', createHealthHandler())
 app.post('/api/login/schedule', createScheduleHandler())
+app.post('/api/import/schedule', createImportScheduleHandler())
 
 if (process.env.NODE_ENV === 'production') {
   const indexHtml = readFileSync(path.join(rootDir, 'dist', 'index.html'))

@@ -32,11 +32,13 @@ test('skips incomplete rows and de-duplicates repeated lessons', () => {
   assert.equal(events.length, 1)
   assert.equal(events[0].date, '2026-11-01')
   assert.equal(events[0].time, '07:30 – 09:20')
-  assert.equal(events[0].teacher, 'Chưa rõ')
+  assert.equal(events[0].teacher, '')
 })
 
 test('expands the QLĐT Excel export into dated lessons', () => {
   const worksheet = {
+    B9: { t: 's', v: 'Giảng viên' },
+    B10: { t: 's', v: 'GV. Nguyễn An' },
     F10: { t: 's', v: 'AT101 - Nhập môn an toàn thông tin' },
     G10: { t: 's', v: 'Từ 05/10/2026 đến 12/10/2026: Thứ 2 tiết 1,2,3 tại P.401\nThứ 4 tiết 7,8,9 tại Lab 2' },
     '!ref': 'A1:G10',
@@ -51,4 +53,5 @@ test('expands the QLĐT Excel export into dated lessons', () => {
     { date: '2026-10-07', code: 'AT101', title: 'Nhập môn an toàn thông tin', time: '12:30 – 14:55', room: 'Lab 2' },
     { date: '2026-10-12', code: 'AT101', title: 'Nhập môn an toàn thông tin', time: '07:00 – 09:25', room: 'P.401' },
   ])
+  assert.ok(events.every((event) => event.teacher === 'GV. Nguyễn An'))
 })

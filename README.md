@@ -1,83 +1,70 @@
 # KMA Schedule by CanhTung
 
-Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN. Frontend vẫn là Vite; API chạy bằng:
+Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN, hiển thị tháng/tuần hiện tại, lịch âm Việt Nam và cho phép thêm/sửa/xóa sự kiện trong phiên hiện tại.
 
 - **Local:** Express ở cổng `3000`, được Vite proxy qua `/api`.
-- **Vercel:** hai Node.js Functions độc lập trong `api/`, không khởi động Express runtime.
+- **Vercel:** Node.js Functions trong `api/`, không khởi động Express runtime.
+- Không dùng API crawl hoặc dịch vụ phân tích bên thứ ba.
 
-Người dùng có thể chọn QLĐT thật hoặc dữ liệu demo. Không sử dụng API crawl/dịch vụ trung gian bên thứ ba.
+## Hai cách mở lịch
+
+### 1. Dùng tài khoản QLĐT
+
+Chọn **Dùng tài khoản QLĐT**, nhập mã sinh viên và mật khẩu. Backend đăng nhập trực tiếp vào QLĐT, tải thời khóa biểu và chỉ dùng credentials trong request hiện tại.
+
+### 2. Dùng file/HTML
+
+Chọn **Dùng file/HTML**, sau đó chọn đúng một nguồn:
+
+- Upload file Excel `.xls`/`.xlsx` xuất từ QLĐT, tối đa **3 MB sau giải mã**; hoặc
+- Dán HTML của trang `StudentTimeTable.aspx`, tối đa **1 MB UTF-8**.
+
+Dữ liệu được gửi bằng JSON tới backend cùng origin và phân tích tại đó. Nếu trang chỉ là trang cấu hình hoặc không có sự kiện, API trả lỗi rõ thay vì mở lịch trống.
 
 ## Bảo mật và giới hạn
 
 - Credentials chỉ được nhận qua `POST /api/login/schedule`, dùng trong request hiện tại rồi bị xóa khỏi object body. Ứng dụng không log hoặc lưu credentials vào file, database, cookie trình duyệt hay `localStorage`.
-- Mỗi request tạo một cookie jar QLĐT riêng; cookie upstream không được trả về browser.
-- Request JSON tối đa 8 KiB; username tối đa 100 ký tự; password tối đa 256 ký tự.
+- Mỗi lần đăng nhập tạo một cookie jar QLĐT riêng; cookie upstream không được trả về browser.
+- Request đăng nhập tối đa 8 KiB; username tối đa 100 ký tự; password tối đa 256 ký tự.
+- API import kiểm tra nghiêm ngặt source type, extension và base64; HTML tối đa 1 MB, workbook giải mã tối đa 3 MB.
 - Mỗi response upstream có timeout và giới hạn kích thước cấu hình được.
-- API trả `Cache-Control: no-store` cùng `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options` và `Permissions-Policy`.
-- **QLĐT chỉ hỗ trợ HTTP.** Vercel bảo vệ browser → Function bằng HTTPS, nhưng chặng Function → `qldt.actvn.edu.vn` vẫn là HTTP, không được mã hóa. Không nhập credentials trên deployment không tin cậy.
-- Function không tạo session lâu dài. Refresh hoặc đăng xuất sẽ yêu cầu đăng nhập lại.
-
-## Yêu cầu
-
-- Node.js 20 trở lên.
-- npm.
+- API trả `Cache-Control: no-store` cùng `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options` và `Permissions-Policy`. Service worker bỏ qua toàn bộ `/api/`.
+- **QLĐT chỉ hỗ trợ HTTP.** HTTPS bảo vệ browser → app, nhưng chặng app server → `qldt.actvn.edu.vn` vẫn không được mã hóa. Chỉ nhập credentials trên deployment do bạn tin cậy và kiểm soát.
+- Không có session lâu dài. Refresh/đăng xuất sẽ xóa lịch đang mở và mọi chỉnh sửa CRUD cục bộ.
 
 ## Chạy local
+
+Yêu cầu Node.js 20+ và npm:
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` chạy đồng thời:
+`npm run dev` chạy Express (`http://localhost:3000`) và Vite (thường là `http://localhost:5173`). Vite proxy `/api` tới Express.
 
-- Express: `http://localhost:3000`
-- Vite: thường là `http://localhost:5173`
-
-Vite proxy `/api` tới Express nên frontend dùng cùng URL API như production. Có thể chạy riêng bằng `npm run dev:server` và `npm run dev:client`.
-
-Các biến môi trường tùy chọn (xem `.env.example`):
+Biến môi trường tùy chọn (xem `.env.example`):
 
 - `PORT`: cổng Express, mặc định `3000`.
-- `QLDT_TIMEOUT_MS`: timeout cho **mỗi** request upstream, mặc định `12000` ms.
+- `QLDT_TIMEOUT_MS`: timeout cho mỗi request upstream, mặc định `12000` ms.
 - `QLDT_MAX_BODY_BYTES`: response upstream tối đa, mặc định `8388608` byte.
 
-Dự án không tự đọc `.env`; hãy export biến qua shell/process manager hoặc khai báo trong Vercel Project Settings. Không đưa username/password QLĐT vào biến môi trường.
+Không đưa username/password QLĐT vào biến môi trường.
 
 ## Test, build và audit
 
 ```bash
 npm test
 npm run build
-npm audit
+npm audit --omit=dev
+git diff --check
 ```
 
-Test parser dùng fixture ẩn danh/workbook trong bộ nhớ. Test API gọi trực tiếp handler với dependency QLĐT giả lập, kiểm tra demo, validation, giới hạn body, security headers và xác nhận các nhánh đó không gọi upstream.
-
-## Deploy full-stack lên Vercel
-
-Repository nguồn: [github.com/canhhtungg/schedule](https://github.com/canhhtungg/schedule)
-
-1. Đăng nhập Vercel và chọn **Add New → Project**.
-2. Chọn **Import Git Repository**, kết nối GitHub nếu cần, rồi import `canhhtungg/schedule`.
-3. Giữ **Root Directory** là thư mục gốc repository.
-4. Vercel sẽ đọc `vercel.json` với:
-   - Framework: `vite`
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-   - Node Functions: `api/**/*.js`, thời lượng tối đa cấu hình `60` giây
-5. Nếu cần đổi giới hạn upstream, thêm `QLDT_TIMEOUT_MS` và/hoặc `QLDT_MAX_BODY_BYTES` trong **Project Settings → Environment Variables**. Không lưu credentials sinh viên tại đây.
-6. Chọn **Deploy**. Sau khi hoàn tất, kiểm tra `GET https://<deployment>/api/health`, mở frontend và thử chế độ demo trước.
-
-Mỗi lần push vào nhánh production sẽ tạo deployment mới theo cấu hình Git của project. Preview deployment cũng có Functions/API tương ứng.
-
-> Lưu ý: một lần tải lịch thực hiện nhiều request HTTP tuần tự tới QLĐT. Upstream có thể chậm, đổi form hoặc tạm ngừng; handler sẽ timeout và trả lỗi ổn định thay vì treo vô hạn. Vercel Function không làm cho chặng HTTP upstream trở thành HTTPS.
+Test bao phủ parser HTML/workbook, giữ giảng viên khi nguồn có, import API (HTML, base64 workbook, input sai/quá cỡ), helper lịch âm, điều hướng ngày và CRUD thuần.
 
 ## API
 
 ### `GET /api/health`
-
-Trả trạng thái Function/server; không gọi QLĐT:
 
 ```json
 { "ok": true, "service": "kma-schedule", "upstreamTransport": "http" }
@@ -85,43 +72,42 @@ Trả trạng thái Function/server; không gọi QLĐT:
 
 ### `POST /api/login/schedule`
 
-Yêu cầu `Content-Type: application/json`.
-
-QLĐT thật:
+`Content-Type: application/json`:
 
 ```json
-{ "mode": "qldt", "username": "...", "password": "..." }
+{ "username": "...", "password": "..." }
 ```
 
-Demo (không gọi upstream):
+### `POST /api/import/schedule`
+
+Nhập HTML:
 
 ```json
-{ "mode": "demo", "username": "DEMO2026", "password": "" }
+{ "sourceType": "html", "content": "<html>...</html>" }
 ```
 
-Kết quả thành công gồm `mode`, `user`, `events`, `warnings`. Mỗi event có `id`, `date` (`YYYY-MM-DD`), `title`, `code`, `time`, `room`, `teacher`, `color`.
+Nhập Excel:
 
-## Luồng QLĐT
+```json
+{ "sourceType": "excel", "contentBase64": "...", "filename": "tkb.xlsx" }
+```
 
-1. Tạo cookie jar mới, GET trang Web Forms login.
-2. Parse hidden input và yêu cầu `__VIEWSTATE`, `__VIEWSTATEGENERATOR`, `__EVENTVALIDATION`.
-3. POST `txtUserName`, `txtPassword`, `btnSubmit`. Backend không tự băm lại password.
-4. Dùng cùng cookie jar để GET trang thời khóa biểu, rồi POST yêu cầu xuất Excel.
-5. Parser đọc workbook; nếu upstream trả bảng HTML thì dùng parser Cheerio dự phòng. Kết quả được chuẩn hóa và loại trùng.
+Kết quả thành công gồm `mode`, `user`, `events`. Mỗi event có `id`, `date` (`YYYY-MM-DD`), `title` và các trường tùy chọn `code`, `time`, `room`, `teacher`, `color`.
 
-Logic này nằm trong `server/qldt.js` và được dùng trực tiếp bởi handler chung cho cả Express local lẫn Vercel Functions.
+## Deploy lên Vercel
+
+`vercel.json` cấu hình Vite build, thư mục `dist` và Functions `api/**/*.js` (tối đa 60 giây). Sau khi deploy, kiểm tra `GET /api/health`, rồi thử import một fixture không nhạy cảm trước khi dùng tài khoản thật.
+
+Một lần tải QLĐT thực hiện nhiều request HTTP tuần tự. Upstream có thể chậm, đổi form hoặc tạm ngừng; handler timeout và trả lỗi ổn định thay vì treo vô hạn.
+
+## Luồng và cấu trúc chính
+
+1. `server/qldt.js` tạo cookie jar, đọc hidden fields Web Forms, đăng nhập và tải export.
+2. `server/parser.js` và `server/workbookParser.js` đọc HTML/workbook, chuẩn hóa và loại trùng sự kiện.
+3. `server/apiHandlers.js` cung cấp handler dùng chung cho Express và Vercel, gồm validation/headers/giới hạn body.
+4. `api/login/schedule.js` và `api/import/schedule.js` là Vercel Functions tương ứng.
+5. `src/calendarUtils.js` bọc `lunar-javascript` (MIT) cho lịch âm; `src/scheduleUtils.js` chứa CRUD thuần.
 
 ## Hạn chế xác minh
 
-Luồng HTTP công khai và parser được kiểm tra không cần credentials thật. Repository không có tài khoản QLĐT nên chưa thể xác minh end-to-end sau đăng nhập. Nếu upstream đổi cấu trúc, API trả lỗi như `UPSTREAM_FORM_CHANGED` hoặc `TIMETABLE_PARSE_FAILED` thay vì trả dữ liệu đoán.
-
-## Cấu trúc chính
-
-- `api/health.js`: Vercel Function cho health check.
-- `api/login/schedule.js`: Vercel Function cho login/lịch.
-- `server/apiHandlers.js`: handler Node dùng chung, validation, headers và dependency injection cho test.
-- `server/index.js`: Express local và static serving khi chạy Node production ngoài Vercel.
-- `server/qldt.js`: Web Forms login, cookie jar, timeout/body limits.
-- `server/parser.js`, `server/workbookParser.js`: chuẩn hóa dữ liệu lịch.
-- `test/apiHandlers.test.js`: unit/integration test trực tiếp handler.
-- `vercel.json`: cấu hình Vite build, output và Functions.
+Luồng parser/API được kiểm tra không cần credentials thật. Repository không có tài khoản QLĐT nên chưa thể xác minh end-to-end sau đăng nhập. Nếu upstream đổi cấu trúc, API trả lỗi ổn định thay vì trả dữ liệu đoán. Parser Excel giữ giảng viên khi export có cột/nhãn nhận diện được; các biến thể bố cục chưa có fixture có thể cần bổ sung alias.
