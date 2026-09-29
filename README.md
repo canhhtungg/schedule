@@ -1,4 +1,4 @@
-# KMA Schedule Rebuild
+# KMA Schedule by CanhTung
 
 Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN. Frontend vẫn là Vite; API chạy bằng:
 
