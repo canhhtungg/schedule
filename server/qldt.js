@@ -135,16 +135,20 @@ export async function fetchQldtSchedule(username, password, options = {}) {
   loginForm.set('txtPassword', password)
   loginForm.set('btnSubmit', 'Đăng nhập')
 
-  const loginResult = await request(fetchWithCookies, LOGIN_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      origin: BASE_URL,
-      referer: LOGIN_URL,
-    },
-    body: loginForm,
-  }, limits)
-  loginForm.set('txtPassword', '')
+  let loginResult
+  try {
+    loginResult = await request(fetchWithCookies, LOGIN_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: BASE_URL,
+        referer: LOGIN_URL,
+      },
+      body: loginForm,
+    }, limits)
+  } finally {
+    loginForm.set('txtPassword', '')
+  }
   if (looksLikeLogin(loginResult.html)) throw new QldtError('INVALID_CREDENTIALS', 'QLĐT từ chối tài khoản hoặc mật khẩu.', 401)
 
   const timetablePage = await request(fetchWithCookies, TIMETABLE_URL, {
