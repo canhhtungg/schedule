@@ -1,7 +1,6 @@
 import * as cheerio from 'cheerio'
 import makeFetchCookie from 'fetch-cookie'
 import { CookieJar } from 'tough-cookie'
-import { createHash } from 'node:crypto'
 import { parseTimetableHtml } from './parser.js'
 import { parseTimetableWorkbook } from './workbookParser.js'
 
@@ -96,10 +95,6 @@ function looksLikeLogin(html) {
   return Boolean(error) || guest === 'khách' || $('input[name="txtPassword"]').length > 0 || $('input[name="txtUserName"]').length > 0
 }
 
-function md5(value) {
-  return createHash('md5').update(value, 'utf8').digest('hex')
-}
-
 function configureExportForm(html) {
   const fields = formFields(html)
   fields.set('dprTerm', '1')
@@ -135,7 +130,9 @@ export async function fetchQldtSchedule(username, password, options = {}) {
   const loginPage = await request(fetchWithCookies, LOGIN_URL, { method: 'GET' }, limits)
   const loginForm = formFields(loginPage.html)
   loginForm.set('txtUserName', username)
-  loginForm.set('txtPassword', md5(password))
+  // The live Web Forms page submits the entered password unchanged; hashing here
+  // would make the server hash an MD5 string a second time and reject valid users.
+  loginForm.set('txtPassword', password)
   loginForm.set('btnSubmit', 'Đăng nhập')
 
   const loginResult = await request(fetchWithCookies, LOGIN_URL, {

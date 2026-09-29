@@ -81,7 +81,7 @@ Kết quả thành công gồm `mode`, `user`, `events`, `warnings`. Mỗi event
 
 1. Tạo cookie jar mới, GET `/CMCSoft.IU.Web.Info/Login.aspx`.
 2. Parse toàn bộ hidden input, bắt buộc có `__VIEWSTATE`, `__VIEWSTATEGENERATOR`, `__EVENTVALIDATION`.
-3. Băm mật khẩu bằng MD5 đúng theo giao thức của cổng trường rồi POST form cùng `txtUserName`, `txtPassword`, `btnSubmit` tới QLĐT. MD5 ở đây chỉ là định dạng mà hệ thống cũ yêu cầu, **không thay thế mã hóa đường truyền**.
+3. POST form cùng `txtUserName`, `txtPassword`, `btnSubmit` đúng như form đăng nhập trình duyệt hiện tại. Backend không tự băm lại mật khẩu vì Web Forms phía trường thực hiện xác minh phía server.
 4. Dùng cùng cookie jar để GET `/CMCSoft.IU.Web.Info/Reports/Form/StudentTimeTable.aspx`, lấy Web Forms state và POST yêu cầu `Xuất file Excel` cho học kỳ đang chọn.
 5. Parser đọc workbook, mở rộng khoảng ngày + thứ + tiết thành từng ngày học; nếu upstream trả bảng HTML thì dùng parser Cheerio dự phòng. Sự kiện được chuẩn hóa và loại trùng.
 
