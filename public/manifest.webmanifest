@@ -1,0 +1,17 @@
+{
+  "name": "Campus Planner Demo",
+  "short_name": "Planner",
+  "description": "Lịch học mẫu chạy hoàn toàn trên trình duyệt",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
