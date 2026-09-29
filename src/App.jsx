@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -27,17 +27,28 @@ const Icon = ({ name, size = 20 }) => {
 }
 
 function Login({ onLogin }) {
-  const [studentId, setStudentId] = useState('DEMO2026')
-  const [password, setPassword] = useState('demo')
+  const [mode, setMode] = useState('qldt')
+  const [studentId, setStudentId] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault()
-    if (!studentId.trim() || !password.trim()) {
+    if (mode === 'qldt' && (!studentId.trim() || !password)) {
       setError('Vui lòng nhập đủ tài khoản và mật khẩu.')
       return
     }
-    onLogin(studentId.trim().toUpperCase())
+    setError('')
+    setLoading(true)
+    try {
+      await onLogin({ username: studentId.trim(), password, mode })
+    } catch (loginError) {
+      setError(loginError.message)
+    } finally {
+      setPassword('')
+      setLoading(false)
+    }
   }
 
   return (
@@ -60,36 +71,25 @@ function Login({ onLogin }) {
           <div className="brand brand-dark mobile-brand"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span></div>
           <p className="eyebrow">CHÀO MỪNG TRỞ LẠI</p>
           <h2>Đăng nhập</h2>
-          <p className="muted">Dùng thông tin điền sẵn để khám phá chế độ demo.</p>
+          <p className="muted">Tải trực tiếp lịch học từ QLĐT, hoặc dùng dữ liệu demo khi chưa có tài khoản.</p>
           <form onSubmit={submit}>
+            <div className="mode-toggle" aria-label="Nguồn dữ liệu">
+              <button type="button" className={mode === 'qldt' ? 'active' : ''} onClick={() => setMode('qldt')}>QLĐT thật</button>
+              <button type="button" className={mode === 'demo' ? 'active' : ''} onClick={() => setMode('demo')}>Demo</button>
+            </div>
             <label htmlFor="student-id">Mã sinh viên</label>
-            <input id="student-id" autoComplete="username" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="Ví dụ: DEMO2026" />
+            <input id="student-id" autoComplete="username" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder={mode === 'qldt' ? 'Mã sinh viên QLĐT' : 'Không bắt buộc'} disabled={loading} />
             <label htmlFor="password">Mật khẩu</label>
-            <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Nhập mật khẩu" />
+            <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'qldt' ? 'Nhập mật khẩu QLĐT' : 'Không cần trong demo'} disabled={mode === 'demo' || loading} />
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="primary-button" type="submit">Vào lịch học <Icon name="arrow" /></button>
+            <button className="primary-button" type="submit" disabled={loading}>{loading ? (mode === 'qldt' ? 'Đang tải từ QLĐT…' : 'Đang mở demo…') : 'Vào lịch học'} {!loading && <Icon name="arrow" />}</button>
           </form>
-          <div className="demo-hint"><span>Demo</span><p><strong>Tài khoản:</strong> DEMO2026 &nbsp;·&nbsp; <strong>Mật khẩu:</strong> demo</p></div>
-          <p className="privacy-note">Thông tin chỉ được lưu trên thiết bị này.</p>
+          <div className="demo-hint"><span>{mode === 'qldt' ? 'Lưu ý' : 'Demo'}</span><p>{mode === 'qldt' ? 'Server kết nối thẳng tới QLĐT; không qua API crawl bên thứ ba.' : 'Dữ liệu minh họa, không cần tài khoản hoặc mật khẩu.'}</p></div>
+          <p className="privacy-note">Mật khẩu không được lưu ở trình duyệt, file hay cơ sở dữ liệu. QLĐT chỉ hỗ trợ HTTP nên đoạn server → QLĐT không được mã hóa; khi triển khai, ứng dụng này phải chạy qua HTTPS.</p>
         </div>
       </section>
     </main>
   )
-}
-
-function createSampleEvents(anchor) {
-  const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
-  const day = (n) => dateKey(new Date(monthStart.getFullYear(), monthStart.getMonth(), n))
-  return [
-    { id: 1, date: day(3), title: 'Cấu trúc dữ liệu', code: 'CS204', time: '07:30 – 09:20', room: 'A-302', teacher: 'GV. Minh Anh', color: 'violet' },
-    { id: 2, date: day(3), title: 'Tiếng Anh chuyên ngành', code: 'EN310', time: '13:00 – 14:50', room: 'B-205', teacher: 'GV. Thu Hà', color: 'amber' },
-    { id: 3, date: day(7), title: 'Mạng máy tính', code: 'NT220', time: '09:30 – 11:20', room: 'Lab 4', teacher: 'GV. Hải Nam', color: 'cyan' },
-    { id: 4, date: day(12), title: 'An toàn hệ thống', code: 'SE301', time: '07:30 – 10:20', room: 'A-405', teacher: 'GV. Đức Long', color: 'green' },
-    { id: 5, date: day(15), title: 'Cơ sở dữ liệu', code: 'DB201', time: '13:00 – 15:50', room: 'B-101', teacher: 'GV. Mai Lan', color: 'rose' },
-    { id: 6, date: day(19), title: 'Phát triển Web', code: 'WEB302', time: '07:30 – 10:20', room: 'Lab 2', teacher: 'GV. Quang Huy', color: 'blue' },
-    { id: 7, date: day(23), title: 'Trí tuệ nhân tạo', code: 'AI401', time: '09:30 – 11:20', room: 'A-201', teacher: 'GV. Hoàng Linh', color: 'violet' },
-    { id: 8, date: day(27), title: 'Seminar học kỳ', code: 'SEM01', time: '14:00 – 16:00', room: 'Hội trường', teacher: 'Khoa CNTT', color: 'amber' },
-  ]
 }
 
 function MonthView({ cursor, events, selected, onSelect }) {
@@ -150,13 +150,13 @@ function EventDetails({ selected, events }) {
   </aside>
 }
 
-function Schedule({ user, onLogout }) {
+function Schedule({ user, events, mode, warnings, onLogout }) {
   const today = new Date()
-  const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
-  const [selected, setSelected] = useState(today)
+  const firstEventDate = events[0]?.date ? new Date(`${events[0].date}T00:00:00`) : today
+  const [cursor, setCursor] = useState(new Date(firstEventDate.getFullYear(), firstEventDate.getMonth(), 1))
+  const [selected, setSelected] = useState(firstEventDate)
   const [view, setView] = useState('month')
   const [menuOpen, setMenuOpen] = useState(false)
-  const events = useMemo(() => createSampleEvents(cursor), [cursor])
 
   const move = (direction) => {
     if (view === 'month') setCursor((value) => new Date(value.getFullYear(), value.getMonth() + direction, 1))
@@ -171,7 +171,7 @@ function Schedule({ user, onLogout }) {
       <div className="brand brand-light"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div>
       <nav><button className="nav-item active"><Icon name="calendar"/>Lịch học</button><button className="nav-item"><Icon name="grid"/>Tổng quan<span className="soon">Sắp có</span></button></nav>
       <div className="sidebar-tip"><p>Gợi ý</p><strong>Chạm vào một ngày</strong><span>để xem chi tiết các môn học.</span></div>
-      <button className="profile" onClick={onLogout}><span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>Chế độ demo</small></span><Icon name="logout"/></button>
+      <button className="profile" onClick={onLogout}><span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Chế độ demo'}</small></span><Icon name="logout"/></button>
     </aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
     <main className="workspace">
@@ -184,6 +184,7 @@ function Schedule({ user, onLogout }) {
         <div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div>
         <div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div>
       </section>
+      {warnings?.map((warning) => <p className="transport-warning" role="note" key={warning}>{warning}</p>)}
       <div className="schedule-layout">
         <section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={setSelected}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={setSelected}/>}</section>
         <EventDetails selected={selected} events={events}/>
@@ -193,8 +194,18 @@ function Schedule({ user, onLogout }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(() => localStorage.getItem('campus-demo-user') || '')
-  const login = (id) => { localStorage.setItem('campus-demo-user', id); setUser(id) }
-  const logout = () => { localStorage.removeItem('campus-demo-user'); setUser('') }
-  return user ? <Schedule user={user} onLogout={logout}/> : <Login onLogin={login}/>
+  const [session, setSession] = useState(null)
+  const login = async (credentials) => {
+    const response = await fetch('/api/login/schedule', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify(credentials),
+    })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(payload?.message || 'Không thể tải lịch học. Vui lòng thử lại.')
+    setSession(payload)
+  }
+  const logout = () => setSession(null)
+  return session ? <Schedule {...session} onLogout={logout}/> : <Login onLogin={login}/>
 }

@@ -1,54 +1,100 @@
-# Campus Planner Demo
+# KMA Schedule Rebuild
 
-Frontend lịch học viết mới bằng React + Vite, lấy cảm hứng ở mức **luồng sử dụng** từ một ứng dụng lịch học công khai. Dự án không dùng tên, logo, hình ảnh hay mã nguồn của đơn vị gốc. Toàn bộ giao diện, nội dung, dữ liệu mẫu và biểu tượng được dựng độc lập.
+Ứng dụng React/Vite + Node/Express hiển thị thời khóa biểu. Người dùng có thể chọn:
 
-## Tính năng
+- **QLĐT thật (mặc định):** backend đăng nhập trực tiếp vào Web Forms của `qldt.actvn.edu.vn`, giữ cookie trong một cookie jar riêng của request, yêu cầu file Excel thời khóa biểu và trả sự kiện đã chuẩn hóa.
+- **Demo:** dữ liệu minh họa rõ ràng, không cần tài khoản hay mật khẩu.
 
-- Đăng nhập demo, không cần backend; phiên đăng nhập chỉ lưu trong `localStorage`.
-- Lịch tháng và lịch tuần, chuyển kỳ, quay về hôm nay, chọn ngày để xem chi tiết.
-- Dữ liệu môn học mẫu tự tạo theo tháng đang xem.
-- Responsive cho desktop/mobile, menu trượt trên màn hình nhỏ.
-- PWA cơ bản: manifest, icon SVG và service worker cache-first fallback (đăng ký ở production).
+Không sử dụng API crawl hoặc dịch vụ trung gian bên thứ ba.
 
-## Chạy dự án
+## Bảo mật và giới hạn
 
-Yêu cầu Node.js 20 trở lên.
+- Mật khẩu chỉ được truyền trong `POST /api/login/schedule`, dùng trong thời gian xử lý request rồi bị xóa khỏi `request.body`; ứng dụng không ghi log, file, database, cookie trình duyệt hoặc `localStorage` chứa credentials.
+- Cookie đăng nhập QLĐT chỉ nằm trong cookie jar phía server được tạo mới cho từng request và không được trả về browser.
+- JSON đầu vào giới hạn 8 KiB; username tối đa 100 ký tự, password tối đa 256 ký tự; từng upstream request có timeout và giới hạn body cấu hình được.
+- Response API đặt `Cache-Control: no-store`.
+- **Cảnh báo transport:** QLĐT hiện chỉ cung cấp HTTP. Production của ứng dụng này phải được phục vụ qua **HTTPS** để bảo vệ browser → app, nhưng đoạn **server → QLĐT vẫn không được mã hóa**. Không triển khai backend này trên mạng/host không đáng tin cậy.
+- Server không tạo session lâu dài. Refresh trang hoặc đăng xuất yêu cầu đăng nhập lại.
+
+## Yêu cầu
+
+- Node.js 20 trở lên (khuyến nghị bản LTS mới).
+
+## Chạy development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Mở URL Vite in ra, thường là `http://localhost:5173`.
+`npm run dev` chạy Express ở `http://localhost:3000` và Vite ở URL thường là `http://localhost:5173`. Vite proxy `/api` tới Express. Có thể chạy riêng bằng `npm run dev:server` và `npm run dev:client`.
 
-### Tài khoản demo
+Nếu cần thay cấu hình mặc định, export các biến trong `.env.example` qua shell/process manager trước khi chạy. Dự án không tự đọc file `.env` để tránh tạo kỳ vọng sai về nơi lưu credentials.
 
-- Mã sinh viên: `DEMO2026`
-- Mật khẩu: `demo`
+## Test và build
 
-Trong bản demo, mọi cặp tài khoản/mật khẩu không rỗng đều được chấp nhận để thuận tiện trình diễn.
+```bash
+npm test
+npm run build
+```
 
-## Build production
+Unit test dùng fixture HTML đã ẩn danh và workbook tạo trong bộ nhớ; không cần credentials thật và không truy cập QLĐT.
+
+## Production
 
 ```bash
 npm run build
-npm run preview
+NODE_ENV=production PORT=3000 npm start
 ```
 
-Bundle được xuất vào `dist/`. Service worker chỉ được đăng ký khi chạy bản production.
+Express phục vụ `dist/` và API trên cùng origin. Đặt reverse proxy HTTPS (Caddy/Nginx/load balancer) trước Express; không expose HTTP app trực tiếp ra Internet.
 
-## Ghi chú khảo sát
+Biến môi trường:
 
-Trang tham chiếu công khai dùng một SPA React/Create React App với route đăng nhập và route lịch được bảo vệ bằng trạng thái phía trình duyệt. Source map công khai liệt kê các phần như `Login`, `Home`, `CalendarHeader`, `Month`/`Day`, `ShowToolTip`, `SmallCalendar` và `PrivateRoute`. Qua đó có thể nhận diện hai cách trình bày: lưới tháng trên desktop và lịch tháng rút gọn kèm danh sách bài học trên mobile; có điều hướng tháng, nút về hiện tại và thông tin môn/thời gian/địa điểm. Stylesheet dùng utility CSS và nhiều màu để phân biệt sự kiện; manifest và service worker cũng được công bố.
+- `PORT`: cổng Express, mặc định `3000`.
+- `QLDT_TIMEOUT_MS`: timeout mỗi request upstream, mặc định `12000` ms.
+- `QLDT_MAX_BODY_BYTES`: body tối đa mỗi response upstream, mặc định `8388608` byte.
 
-Ứng dụng tham chiếu có gọi `https://api-crawl-tkb.vercel.app`; bản dựng này **không kết nối API đó hoặc bất kỳ backend nào**, và không gửi thông tin đăng nhập ra khỏi trình duyệt. Toàn bộ lịch học là dữ liệu demo/local.
+## API
 
-Bản dựng này chỉ kế thừa các mẫu UX phổ biến nói trên. Mã và giao diện được viết lại độc lập; kiến trúc được đơn giản hoá thành state React cục bộ, không dùng Redux/router/dayjs, đồng thời áp dụng một hệ thống thiết kế mới (sidebar tối, typography editorial, panel chi tiết ngày) và responsive riêng cho mobile.
+### `GET /api/health`
 
-## File chính
+Trả trạng thái backend; không thử đăng nhập QLĐT.
 
-- `src/App.jsx`: login demo, dữ liệu mẫu, lịch tháng/tuần và chi tiết ngày.
-- `src/styles.css`: toàn bộ design system và responsive layout.
-- `src/main.jsx`: entry React và đăng ký service worker production.
-- `public/manifest.webmanifest`, `public/sw.js`, `public/icon.svg`: lớp PWA.
-- `vite.config.js`: cấu hình Vite tối giản.
+### `POST /api/login/schedule`
+
+QLĐT thật:
+
+```json
+{ "mode": "qldt", "username": "...", "password": "..." }
+```
+
+Demo:
+
+```json
+{ "mode": "demo", "username": "DEMO2026", "password": "" }
+```
+
+Kết quả thành công gồm `mode`, `user`, `events`, `warnings`. Mỗi event có `id`, `date` (`YYYY-MM-DD`), `title`, `code`, `time`, `room`, `teacher`, `color`.
+
+## Luồng QLĐT
+
+1. Tạo cookie jar mới, GET `/CMCSoft.IU.Web.Info/Login.aspx`.
+2. Parse toàn bộ hidden input, bắt buộc có `__VIEWSTATE`, `__VIEWSTATEGENERATOR`, `__EVENTVALIDATION`.
+3. Băm mật khẩu bằng MD5 đúng theo giao thức của cổng trường rồi POST form cùng `txtUserName`, `txtPassword`, `btnSubmit` tới QLĐT. MD5 ở đây chỉ là định dạng mà hệ thống cũ yêu cầu, **không thay thế mã hóa đường truyền**.
+4. Dùng cùng cookie jar để GET `/CMCSoft.IU.Web.Info/Reports/Form/StudentTimeTable.aspx`, lấy Web Forms state và POST yêu cầu `Xuất file Excel` cho học kỳ đang chọn.
+5. Parser đọc workbook, mở rộng khoảng ngày + thứ + tiết thành từng ngày học; nếu upstream trả bảng HTML thì dùng parser Cheerio dự phòng. Sự kiện được chuẩn hóa và loại trùng.
+
+## Hạn chế xác minh
+
+Luồng HTTP công khai và cấu trúc form login đã được kiểm tra không cần credentials. Fixture/unit test kiểm chứng parser cho cấu trúc bảng đại diện. Tuy nhiên repository không có tài khoản QLĐT thật, nên **chưa thể xác minh end-to-end sau đăng nhập** hoặc bảo đảm HTML timetable thực tế hiện tại khớp hoàn toàn. Nếu QLĐT render bảng theo cấu trúc khác, backend sẽ trả `TIMETABLE_PARSE_FAILED` thay vì trả dữ liệu sai; cần lấy một bản HTML đã ẩn danh từ phiên hợp lệ để bổ sung fixture/parser.
+
+## Cấu trúc chính
+
+- `server/index.js`: Express API và static serving production.
+- `server/qldt.js`: Web Forms login, cookie jar, timeout/body limits.
+- `server/parser.js`: parser HTML dự phòng và normalized event model.
+- `server/workbookParser.js`: parser file Excel xuất từ QLĐT, mở rộng lịch theo tuần.
+- `src/App.jsx`: login QLĐT/demo, loading/error và lịch tháng/tuần.
+- `test/fixtures/`: HTML fixture đã ẩn danh.
+- `test/parser.test.js`: unit test parser.

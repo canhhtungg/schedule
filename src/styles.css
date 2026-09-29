@@ -31,12 +31,17 @@ button { border: 0; cursor: pointer; }
 .login-box h2 { margin: 0; font: 600 46px/1.08 'Newsreader', serif; letter-spacing: -.03em; }
 .muted { margin: 12px 0 36px; color: var(--muted); font-size: 14px; line-height: 1.65; }
 .login-box form { display: grid; gap: 10px; }
+.mode-toggle { display: grid; margin-bottom: 10px; padding: 4px; grid-template-columns: 1fr 1fr; gap: 4px; border-radius: 10px; background: #eceef2; }
+.mode-toggle button { height: 38px; border-radius: 7px; color: #737784; background: transparent; font-size: 11px; font-weight: 800; }
+.mode-toggle button.active { color: #fff; background: var(--ink); box-shadow: 0 2px 7px rgba(17,24,39,.18); }
 .login-box label { margin-top: 8px; color: #343741; font-size: 12px; font-weight: 800; }
 .login-box input { width: 100%; height: 52px; padding: 0 15px; color: var(--ink); outline: none; border: 1px solid #dfe1e6; border-radius: 10px; background: #fafafa; transition: .2s; }
+.login-box input:disabled { color: #9da0aa; cursor: not-allowed; background: #f1f2f4; }
 .login-box input:focus { border-color: #8889e9; box-shadow: 0 0 0 3px rgba(91,92,226,.11); background: #fff; }
 .form-error { margin: 3px 0 0; color: #c43d55; font-size: 12px; }
 .primary-button { display: flex; height: 54px; margin-top: 14px; padding: 0 19px; align-items: center; justify-content: space-between; border-radius: 10px; color: #fff; background: var(--ink); font-size: 13px; font-weight: 800; transition: transform .2s, background .2s; }
 .primary-button:hover { transform: translateY(-1px); background: #262d3a; }
+.primary-button:disabled { cursor: wait; opacity: .7; transform: none; }
 .demo-hint { display: flex; margin-top: 24px; padding: 14px; align-items: center; gap: 12px; border-radius: 10px; background: #f4f3ff; color: #5d6080; font-size: 11px; }
 .demo-hint span { padding: 5px 8px; border-radius: 6px; color: #fff; background: var(--violet); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .demo-hint p { margin: 0; }.privacy-note { margin: 18px 0 0; color: #a0a3ac; font-size: 10px; text-align: center; }
@@ -59,6 +64,7 @@ button { border: 0; cursor: pointer; }
 .period-nav { display: flex; align-items: center; gap: 4px; }.period-nav button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: #737784; background: #fff; }.period-nav button:hover { color: #1f2330; border-color: #cfd1d8; }.period-nav .today-button { width: auto; margin-right: 7px; padding: 0 13px; font-size: 11px; font-weight: 700; }.period-nav h2 { min-width: 185px; margin: 0 0 0 13px; font-size: 14px; letter-spacing: -.01em; }
 .view-toggle { display: flex; padding: 3px; border-radius: 9px; background: #e7e8ec; }.view-toggle button { min-width: 65px; height: 30px; border-radius: 7px; color: #777b87; background: transparent; font-size: 10px; font-weight: 800; }.view-toggle button.active { color: #22252d; background: #fff; box-shadow: 0 1px 4px rgba(24,26,34,.11); }
 .schedule-layout { display: grid; max-width: 1460px; margin: auto; grid-template-columns: minmax(0, 1fr) 292px; gap: 14px; align-items: start; }
+.transport-warning { max-width: 1460px; margin: 0 auto 14px; padding: 10px 13px; border: 1px solid #f0d9a9; border-radius: 9px; color: #795718; background: #fff8e8; font-size: 10px; line-height: 1.5; }
 .calendar-panel, .details-panel { border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: 0 2px 8px rgba(25,29,39,.025); overflow: hidden; }
 .weekday-row { display: grid; height: 40px; grid-template-columns: repeat(7, 1fr); align-items: center; border-bottom: 1px solid var(--line); color: #979aa4; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-align: center; }
 .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }

@@ -4,16 +4,26 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n server,vite \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "start": "NODE_ENV=production node server/index.js",
+    "preview": "npm run start",
+    "test": "node --test"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.3",
+    "cheerio": "^1.2.0",
+    "express": "^5.2.1",
+    "fetch-cookie": "^3.2.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
     "vite": "^8.3.1"
   }
 }

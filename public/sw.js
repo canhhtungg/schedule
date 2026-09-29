@@ -1,4 +1,4 @@
-const CACHE = 'campus-planner-v1'
+const CACHE = 'campus-planner-v2'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -14,7 +14,7 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return
+  if (event.request.method !== 'GET' || new URL(event.request.url).pathname.startsWith('/api/')) return
   event.respondWith(
     fetch(event.request)
       .then((response) => {
