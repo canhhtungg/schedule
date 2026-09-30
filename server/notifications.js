@@ -98,8 +98,8 @@ export function nextDelivery(reminderAtMs, nowMs = Date.now()) {
 export function notificationForReminder(reminder, chainId) {
   const eventLine = reminder.room ? `${reminder.title} · ${reminder.room}` : reminder.title
   return {
-    title: eventLine,
-    body: `Lúc ${reminder.time}`,
+    title: '',
+    body: `${eventLine}\nLúc ${reminder.time}`,
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
     tag: `schedule-${chainId}-${reminder.id}-${reminder.remindAt}`.slice(0, 240),

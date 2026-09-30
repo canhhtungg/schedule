@@ -230,8 +230,8 @@ test('delivery verifies raw body before decrypting and sends a due push', async 
   assert.equal(res.payload.complete, true)
   assert.equal(verifiedBody, raw.toString('utf8'))
   assert.equal(sent[0].endpoint, subscription().endpoint)
-  assert.equal(sent[1].title, 'Mật mã học · P.402')
-  assert.equal(sent[1].body, 'Lúc 07:30 – 09:20')
+  assert.equal(sent[1].title, '')
+  assert.equal(sent[1].body, 'Mật mã học · P.402\nLúc 07:30 – 09:20')
   assert.equal(sent[1].data.url, '/?date=2026-09-30')
 })
 
