@@ -190,8 +190,8 @@ test('test endpoint sends an immediate fixed Web Push payload', async () => {
   assert.equal(res.statusCode, 200)
   assert.deepEqual(res.payload, { sent: true })
   assert.equal(sent[0].endpoint, subscription().endpoint)
-  assert.equal(sent[1].title, 'KMA Planner')
-  assert.match(sent[1].body, /Thông báo thử/)
+  assert.equal(sent[1].title, 'KMA Planner báo có lịch')
+  assert.equal(sent[1].body, 'Thông báo thử\nNgay bây giờ')
   assert.equal(sent[1].tag, `notification-test-${now}`)
 })
 
@@ -230,8 +230,8 @@ test('delivery verifies raw body before decrypting and sends a due push', async 
   assert.equal(res.payload.complete, true)
   assert.equal(verifiedBody, raw.toString('utf8'))
   assert.equal(sent[0].endpoint, subscription().endpoint)
-  assert.equal(sent[1].title, 'Mật mã học')
-  assert.match(sent[1].body, /P\.402/)
+  assert.equal(sent[1].title, 'KMA Planner báo có lịch')
+  assert.equal(sent[1].body, 'Mật mã học · P.402\nLúc 07:30 – 09:20')
   assert.equal(sent[1].data.url, '/?date=2026-09-30')
 })
 

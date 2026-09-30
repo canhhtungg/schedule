@@ -75,7 +75,7 @@ function Login({ onLogin }) {
   return <main className="login-page">
     <section className="login-story" aria-label="Giới thiệu">
       <div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
-      <div className="story-copy"><p className="eyebrow">LỊCH HỌC, GỌN GÀNG HƠN</p><h1>Một tuần rõ ràng.<br/>Một ngày chủ động.</h1><p>Theo dõi môn học, phòng học và thời gian trong một không gian tập trung.</p><div className="mini-calendar" aria-hidden="true"><span className="mini-label">TUẦN NÀY</span>{[12, 13, 14, 15, 16].map((day, index) => <span className={index === 2 ? 'active' : ''} key={day}>{day}</span>)}</div></div>
+      <div className="story-copy"><p className="eyebrow">LỊCH HỌC, GỌN GÀNG HƠN</p><h1>Một tuần rõ ràng.<br/>Một ngày chủ động.</h1><p>Theo dõi môn học, phòng học và thời gian trong một không gian tập trung.</p><div className="mini-calendar" aria-hidden="true"><span className="mini-label">TUẦN NÀY</span>{[12, 13, 14, 15, 16].map((day, index) => <span className={index === 0 ? 'active' : ''} key={day}>{day}</span>)}</div></div>
     </section>
     <section className="login-panel"><div className="login-box">
       <div className="brand brand-dark mobile-brand"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
@@ -153,7 +153,7 @@ function EventModal({ event, selected, onClose, onSave }) {
 function EventDetails({ selected, events, onAdd, onEdit, onDelete }) {
   const dayEvents = events.filter((event) => event.date === dateKey(selected))
   const formatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })
-  return <aside className="details-panel"><div className="details-heading"><div><p className="eyebrow">LỊCH TRONG NGÀY</p><h3>{formatter.format(selected)}</h3></div><div className="details-heading-actions"><span className="count-badge">{dayEvents.length}</span><button className="add-event" onClick={onAdd}><Icon name="plus" size={16}/>Thêm</button></div></div>
+  return <aside className={`details-panel event-count-${Math.min(dayEvents.length, 2)}`}><div className="details-heading"><div><p className="eyebrow">LỊCH TRONG NGÀY</p><h3>{formatter.format(selected)}</h3></div><div className="details-heading-actions"><span className="count-badge">{dayEvents.length}</span><button className="add-event" onClick={onAdd}><Icon name="plus" size={16}/>Thêm</button></div></div>
     <div className="details-list">{dayEvents.length ? dayEvents.map((event) => <article className="lesson-card" key={event.id}><span className={`lesson-accent ${event.color}`} /><div className="lesson-content">{event.code && <span className="subject-code">{event.code}</span>}<h4>{event.title}</h4>{event.time && <p><Icon name="clock" size={16}/>{event.time}</p>}{event.room && <p><Icon name="pin" size={16}/>{event.room}</p>}{event.teacher && <p><Icon name="user" size={16}/>{event.teacher}</p>}</div><div className="lesson-actions"><button aria-label={`Sửa ${event.title}`} onClick={() => onEdit(event)}><Icon name="edit" size={15}/></button><button aria-label={`Xóa ${event.title}`} onClick={() => onDelete(event)}><Icon name="trash" size={15}/></button></div></article>) : <div className="empty-state"><span><Icon name="book" size={24}/></span><h4>Không có lịch học</h4><p>Bạn có thể thêm một sự kiện cho ngày này.</p></div>}</div>
   </aside>
 }
@@ -206,6 +206,7 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const [view, setView] = useState('month')
   const [page, setPage] = useState('calendar')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [modalEvent, setModalEvent] = useState(undefined)
   const notifications = useScheduleNotifications(events)
 
@@ -224,8 +225,8 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const openPage = (nextPage) => { setPage(nextPage); setMenuOpen(false) }
   const logout = async () => { await notifications.shutdown(); onLogout() }
 
-  return <div className="app-shell">
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
+  return <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span className="brand-name">KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><button className="sidebar-collapse" type="button" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed((value) => !value)}><Icon name={sidebarCollapsed ? 'chevronRight' : 'chevronLeft'} size={16}/></button><nav><button aria-label="Lịch học" className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/><span className="nav-label">Lịch học</span></button><button aria-label="Cài đặt" className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/><span className="nav-label">Cài đặt</span></button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span className="profile-copy"><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
     <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'KMA PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
       {page === 'calendar' ? <>

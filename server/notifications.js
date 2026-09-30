@@ -96,11 +96,10 @@ export function nextDelivery(reminderAtMs, nowMs = Date.now()) {
 }
 
 export function notificationForReminder(reminder, chainId) {
-  const bodyParts = [`Lúc ${reminder.time}`]
-  if (reminder.room) bodyParts.push(`Phòng ${reminder.room}`)
+  const eventLine = reminder.room ? `${reminder.title} · ${reminder.room}` : reminder.title
   return {
-    title: reminder.title,
-    body: bodyParts.join(' · '),
+    title: 'KMA Planner báo có lịch',
+    body: `${eventLine}\nLúc ${reminder.time}`,
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
     tag: `schedule-${chainId}-${reminder.id}-${reminder.remindAt}`.slice(0, 240),
@@ -110,8 +109,8 @@ export function notificationForReminder(reminder, chainId) {
 
 export function notificationForTest(nowMs = Date.now()) {
   return {
-    title: 'KMA Planner',
-    body: 'Thông báo thử đã hoạt động trên thiết bị này.',
+    title: 'KMA Planner báo có lịch',
+    body: 'Thông báo thử\nNgay bây giờ',
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
     tag: `notification-test-${nowMs}`,
