@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { readNotificationSettings, saveNotificationSettings, urlBase64ToUint8Array } from './notificationSettings.js'
+import { detectNotificationEnvironment, readNotificationSettings, saveNotificationSettings, urlBase64ToUint8Array } from './notificationSettings.js'
 
 const jsonRequest = (url, body) => fetch(url, {
   method: 'POST',
@@ -7,14 +7,6 @@ const jsonRequest = (url, body) => fetch(url, {
   cache: 'no-store',
   body: JSON.stringify(body),
 })
-
-function browserCapability() {
-  return typeof window !== 'undefined'
-    && window.isSecureContext
-    && 'serviceWorker' in navigator
-    && 'PushManager' in window
-    && 'Notification' in window
-}
 
 function publicEvents(events) {
   return events.map(({ id, date, title, time, room }) => ({ id, date, title, time, room }))
@@ -24,7 +16,8 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
   const [settings, setSettings] = useState(() => readNotificationSettings(storage))
   const [server, setServer] = useState({ loading: true, available: false, publicKey: '' })
   const [state, setState] = useState({ phase: 'idle', count: 0, message: '' })
-  const supported = browserCapability()
+  const environment = detectNotificationEnvironment()
+  const supported = environment.supported
   const settingsRef = useRef(settings)
   const operationRef = useRef(Promise.resolve())
   const mountedRef = useRef(true)
@@ -93,6 +86,10 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
   }, [events, schedule, server.available, settings.enabled, settings.leadMinutes, supported])
 
   const enable = useCallback(async () => {
+    if (environment.needsInstallation) {
+      setState({ phase: 'needs-action', count: 0, message: 'Trên iPhone/iPad, hãy Thêm vào Màn hình chính rồi mở ứng dụng từ biểu tượng trước khi bật thông báo.' })
+      return
+    }
     if (!supported || !server.available || !server.publicKey) return
     setState({ phase: 'permission', count: 0, message: 'Đang chờ quyền thông báo…' })
     const permission = await Notification.requestPermission()
@@ -104,7 +101,19 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     try {
       const registration = await navigator.serviceWorker.ready
       let subscription = await registration.pushManager.getSubscription()
-      if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(server.publicKey) })
+      if (!subscription) {
+        const options = { userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(server.publicKey) }
+        try {
+          subscription = await registration.pushManager.subscribe(options)
+        } catch (firstError) {
+          // Safari can retain a stale push state after reinstall/update. Refresh the
+          // registration and retry once while still handling the user's click.
+          if (!environment.ios) throw firstError
+          await registration.update()
+          subscription = await registration.pushManager.getSubscription()
+            || await registration.pushManager.subscribe(options)
+        }
+      }
       if (!subscription) throw new Error('Không thể tạo push subscription.')
       persist({ ...settingsRef.current, enabled: true })
       setState({ phase: 'scheduling', count: 0, message: 'Đang đồng bộ lịch nhắc…' })
@@ -112,7 +121,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
       persist({ ...settingsRef.current, enabled: false, messageId: null, chainId: null })
       setState({ phase: 'error', count: 0, message: error.message || 'Trình duyệt không thể đăng ký Web Push.' })
     }
-  }, [persist, server.available, server.publicKey, supported])
+  }, [environment.ios, environment.needsInstallation, persist, server.available, server.publicKey, supported])
 
   const disable = useCallback(async () => {
     const previous = settingsRef.current
@@ -142,7 +151,8 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
   }, [persist])
 
   let availability
-  if (!supported) availability = 'Trình duyệt hoặc ngữ cảnh hiện tại không hỗ trợ Web Push.'
+  if (environment.needsInstallation) availability = 'Trên iPhone/iPad: chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở ứng dụng từ biểu tượng để bật Web Push.'
+  else if (!supported) availability = 'Trình duyệt hoặc ngữ cảnh hiện tại không hỗ trợ Web Push.'
   else if (server.loading) availability = 'Đang kiểm tra máy chủ thông báo…'
   else if (!server.available) availability = 'Máy chủ chưa cấu hình Web Push.'
   else if (Notification.permission === 'denied') availability = 'Quyền thông báo đang bị chặn trong trình duyệt.'
@@ -153,6 +163,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     settings,
     state,
     supported,
+    environment,
     server,
     availability,
     toggle,

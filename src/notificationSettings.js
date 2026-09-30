@@ -30,6 +30,23 @@ export function saveNotificationSettings(storage, settings) {
   return normalized
 }
 
+export function detectNotificationEnvironment(windowObject = globalThis.window, navigatorObject = globalThis.navigator) {
+  const userAgent = navigatorObject?.userAgent || ''
+  const platform = navigatorObject?.platform || ''
+  const ios = /iPad|iPhone|iPod/i.test(userAgent) || (platform === 'MacIntel' && Number(navigatorObject?.maxTouchPoints) > 1)
+  const standalone = windowObject?.matchMedia?.('(display-mode: standalone)')?.matches === true || navigatorObject?.standalone === true
+  const basicSupport = windowObject?.isSecureContext === true
+    && 'serviceWorker' in (navigatorObject || {})
+    && 'PushManager' in (windowObject || {})
+    && 'Notification' in (windowObject || {})
+  return {
+    ios,
+    standalone,
+    needsInstallation: ios && !standalone,
+    supported: basicSupport && (!ios || standalone),
+  }
+}
+
 export function urlBase64ToUint8Array(value) {
   const padding = '='.repeat((4 - value.length % 4) % 4)
   const binary = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'))

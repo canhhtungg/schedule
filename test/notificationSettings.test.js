@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   NOTIFICATION_STORAGE_KEY,
+  detectNotificationEnvironment,
   readNotificationSettings,
   saveNotificationSettings,
 } from '../src/notificationSettings.js'
@@ -32,4 +33,18 @@ test('notification settings reject corrupt values', () => {
   const storage = memoryStorage()
   storage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify({ enabled: 'yes', leadMinutes: 10, messageId: '../bad', chainId: 'short' }))
   assert.deepEqual(readNotificationSettings(storage), { enabled: false, leadMinutes: 30, messageId: null, chainId: null })
+})
+
+test('iPhone Web Push requires the installed standalone PWA', () => {
+  const navigatorObject = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', serviceWorker: {}, standalone: false }
+  const browserWindow = { isSecureContext: true, PushManager: class {}, Notification: class {}, matchMedia: () => ({ matches: false }) }
+  assert.deepEqual(detectNotificationEnvironment(browserWindow, navigatorObject), {
+    ios: true,
+    standalone: false,
+    needsInstallation: true,
+    supported: false,
+  })
+
+  navigatorObject.standalone = true
+  assert.equal(detectNotificationEnvironment(browserWindow, navigatorObject).supported, true)
 })
