@@ -5,10 +5,11 @@ import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLuna
 import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
 import { NOTIFICATION_LEADS } from './notificationSettings.js'
 import { useScheduleNotifications } from './useScheduleNotifications.js'
+import { formatTimeRange, parseTimeRange } from './timeUtils.js'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
-const EMPTY_DRAFT = { date: '', title: '', code: '', time: '', room: '', teacher: '' }
+const EMPTY_DRAFT = { date: '', title: '', code: '', startTime: '', endTime: '', room: '', teacher: '' }
 
 const Icon = ({ name, size = 20 }) => {
   const paths = {
@@ -73,12 +74,12 @@ function Login({ onLogin }) {
 
   return <main className="login-page">
     <section className="login-story" aria-label="Giới thiệu">
-      <div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span></div>
+      <div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
       <div className="story-copy"><p className="eyebrow">LỊCH HỌC, GỌN GÀNG HƠN</p><h1>Một tuần rõ ràng.<br/>Một ngày chủ động.</h1><p>Theo dõi môn học, phòng học và thời gian trong một không gian tập trung.</p><div className="mini-calendar" aria-hidden="true"><span className="mini-label">TUẦN NÀY</span>{[12, 13, 14, 15, 16].map((day, index) => <span className={index === 2 ? 'active' : ''} key={day}>{day}</span>)}</div></div>
       <p className="story-note">Dữ liệu của bạn chỉ được xử lý trong ứng dụng</p>
     </section>
     <section className="login-panel"><div className="login-box">
-      <div className="brand brand-dark mobile-brand"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span></div>
+      <div className="brand brand-dark mobile-brand"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
       <p className="eyebrow">CHÀO MỪNG TRỞ LẠI</p><h2>Mở lịch học</h2>
       <p className="muted">Đăng nhập QLĐT hoặc tự nhập file/HTML thời khóa biểu, không qua API bên thứ ba.</p>
       <form onSubmit={submit}>
@@ -134,7 +135,8 @@ function WeekView({ cursor, events, selected, onSelect, showLunar }) {
 }
 
 function EventModal({ event, selected, onClose, onSave }) {
-  const [draft, setDraft] = useState(event ? { ...EMPTY_DRAFT, ...event } : { ...EMPTY_DRAFT, date: dateKey(selected) })
+  const eventTimes = parseTimeRange(event?.time)
+  const [draft, setDraft] = useState(event ? { ...EMPTY_DRAFT, ...event, ...eventTimes } : { ...EMPTY_DRAFT, date: dateKey(selected) })
   const [error, setError] = useState('')
   const titleRef = useRef(null)
   useEffect(() => {
@@ -144,10 +146,10 @@ function EventModal({ event, selected, onClose, onSave }) {
     return () => document.removeEventListener('keydown', closeOnEscape)
   }, [onClose])
   const update = (name) => (e) => setDraft((value) => ({ ...value, [name]: e.target.value }))
-  const submit = (e) => { e.preventDefault(); try { onSave(draft, event?.id); onClose() } catch (saveError) { setError(saveError.message) } }
+  const submit = (e) => { e.preventDefault(); try { onSave({ ...draft, time: formatTimeRange(draft.startTime, draft.endTime) }, event?.id); onClose() } catch (saveError) { setError(saveError.message) } }
   return <div className="modal-backdrop"><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
     <div className="modal-heading"><div><p className="eyebrow">SỰ KIỆN TRONG NGÀY</p><h2 id="event-modal-title">{event ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2></div><button className="icon-button" type="button" aria-label="Đóng" onClick={onClose}><Icon name="close"/></button></div>
-    <form onSubmit={submit}><div className="form-grid"><label>Ngày *<input type="date" value={draft.date} onChange={update('date')} required /></label><label>Tên sự kiện *<input ref={titleRef} value={draft.title} onChange={update('title')} maxLength="200" required /></label><label>Mã môn<input value={draft.code} onChange={update('code')} maxLength="50" /></label><label>Thời gian<input value={draft.time} onChange={update('time')} maxLength="100" placeholder="07:30 – 09:20" /></label><label>Phòng<input value={draft.room} onChange={update('room')} maxLength="100" /></label><label>Giảng viên<input value={draft.teacher} onChange={update('teacher')} maxLength="150" /></label></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={onClose}>Hủy</button><button className="save-button" type="submit">{event ? 'Lưu thay đổi' : 'Thêm sự kiện'}</button></div></form>
+    <form onSubmit={submit}><div className="form-grid"><label>Ngày *<input type="date" value={draft.date} onChange={update('date')} required /></label><label>Tên sự kiện *<input ref={titleRef} value={draft.title} onChange={update('title')} maxLength="200" required /></label><label>Mã môn<input value={draft.code} onChange={update('code')} maxLength="50" /></label><label>Giờ bắt đầu<input type="time" step="60" value={draft.startTime} onChange={update('startTime')} /></label><label>Giờ kết thúc<input type="time" step="60" value={draft.endTime} min={draft.startTime || undefined} onChange={update('endTime')} /></label><label>Phòng<input value={draft.room} onChange={update('room')} maxLength="100" /></label><label>Giảng viên<input value={draft.teacher} onChange={update('teacher')} maxLength="150" /></label></div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" onClick={onClose}>Hủy</button><button className="save-button" type="submit">{event ? 'Lưu thay đổi' : 'Thêm sự kiện'}</button></div></form>
   </section></div>
 }
 
@@ -228,9 +230,9 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const logout = async () => { await notifications.shutdown(); onLogout() }
 
   return <div className="app-shell">
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
-    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'CAMPUS PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
+    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'KMA PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
       {page === 'calendar' ? <>
         <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
         <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>

@@ -1,6 +1,6 @@
 {
-  "name": "Campus Planner",
-  "short_name": "Planner",
+  "name": "KMA Planner",
+  "short_name": "KMA Planner",
   "description": "Lịch học KMA với nhắc lịch Web Push",
   "id": "/",
   "start_url": "/",
