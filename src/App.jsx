@@ -76,12 +76,10 @@ function Login({ onLogin }) {
     <section className="login-story" aria-label="Giới thiệu">
       <div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
       <div className="story-copy"><p className="eyebrow">LỊCH HỌC, GỌN GÀNG HƠN</p><h1>Một tuần rõ ràng.<br/>Một ngày chủ động.</h1><p>Theo dõi môn học, phòng học và thời gian trong một không gian tập trung.</p><div className="mini-calendar" aria-hidden="true"><span className="mini-label">TUẦN NÀY</span>{[12, 13, 14, 15, 16].map((day, index) => <span className={index === 2 ? 'active' : ''} key={day}>{day}</span>)}</div></div>
-      <p className="story-note">Dữ liệu của bạn chỉ được xử lý trong ứng dụng</p>
     </section>
     <section className="login-panel"><div className="login-box">
       <div className="brand brand-dark mobile-brand"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>KMA Planner</span></div>
       <p className="eyebrow">CHÀO MỪNG TRỞ LẠI</p><h2>Mở lịch học</h2>
-      <p className="muted">Đăng nhập QLĐT hoặc tự nhập file/HTML thời khóa biểu, không qua API bên thứ ba.</p>
       <form onSubmit={submit}>
         <div className="mode-toggle" aria-label="Nguồn dữ liệu"><button type="button" className={mode === 'qldt' ? 'active' : ''} onClick={() => chooseMode('qldt')}>Dùng tài khoản QLĐT</button><button type="button" className={mode === 'import' ? 'active' : ''} onClick={() => chooseMode('import')}>Dùng file/HTML</button></div>
         {mode === 'qldt' ? <>
@@ -89,12 +87,11 @@ function Login({ onLogin }) {
           <label htmlFor="password">Mật khẩu</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Nhập mật khẩu QLĐT" disabled={loading} />
         </> : <>
           <fieldset className="import-choice"><legend>Chọn một nguồn</legend><label><input type="radio" name="import-type" checked={importType === 'excel'} onChange={() => setImportType('excel')} /> File Excel</label><label><input type="radio" name="import-type" checked={importType === 'html'} onChange={() => setImportType('html')} /> Dán HTML</label></fieldset>
-          {importType === 'excel' ? <><label htmlFor="schedule-file">File thời khóa biểu (.xls, .xlsx)</label><input className="file-input" id="schedule-file" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={loading} /><p className="field-help">Tối đa 3 MB.</p></> : <><label htmlFor="schedule-html">HTML trang StudentTimeTable.aspx</label><textarea id="schedule-html" value={html} onChange={(e) => setHtml(e.target.value)} placeholder="Dán mã HTML tại đây…" rows="8" disabled={loading} /><p className="field-help">Tối đa 1 MB.</p></>}
+          {importType === 'excel' ? <><label htmlFor="schedule-file">File thời khóa biểu (.xls, .xlsx)</label><input className="file-input" id="schedule-file" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={loading} /></> : <><label htmlFor="schedule-html">HTML trang StudentTimeTable.aspx</label><textarea id="schedule-html" value={html} onChange={(e) => setHtml(e.target.value)} placeholder="Dán mã HTML tại đây…" rows="8" disabled={loading} /></>}
         </>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" type="submit" disabled={loading}>{loading ? (mode === 'qldt' ? 'Đang tải từ QLĐT…' : 'Đang phân tích dữ liệu…') : 'Mở lịch học'} {!loading && <Icon name="arrow" />}</button>
       </form>
-      <p className="privacy-note">Mật khẩu không được lưu ở trình duyệt, file hay cơ sở dữ liệu. File và HTML chỉ được gửi tới backend cùng origin để phân tích.</p>
     </div></section>
   </main>
 }
@@ -172,10 +169,9 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, not
       <button className="back-button" type="button" onClick={onBack}><Icon name="chevronLeft" size={17}/>Quay lại Lịch học</button>
       <p className="eyebrow">TÙY CHỈNH TRẢI NGHIỆM</p>
       <h2 id="settings-title">Cài đặt</h2>
-      <p>Mọi lựa chọn chỉ được lưu trên trình duyệt này.</p>
     </div>
     <div className="settings-group">
-      <div className="setting-copy"><h3>Giao diện</h3><p>Chọn màu sắc phù hợp hoặc đồng bộ với hệ điều hành.</p></div>
+      <div className="setting-copy"><h3>Giao diện</h3></div>
       <fieldset className="theme-options"><legend className="sr-only">Chọn giao diện</legend>{themes.map((option) => <label className={theme === option.value ? 'selected' : ''} key={option.value}>
         <input type="radio" name="theme" value={option.value} checked={theme === option.value} onChange={() => onThemeChange(option.value)} />
         <span className={`theme-preview ${option.value}`} aria-hidden="true"><i/><i/><i/></span>
@@ -183,12 +179,12 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, not
       </label>)}</fieldset>
     </div>
     <div className="settings-group setting-row">
-      <div className="setting-copy"><h3>Hiển thị lịch âm</h3><p>Hiện ngày âm trên mọi ô lịch. Khi tắt, mùng 1 và ngày 15 vẫn được đánh dấu và hiển thị.</p></div>
+      <div className="setting-copy"><h3>Hiển thị lịch âm</h3></div>
       <label className="switch"><input type="checkbox" checked={showLunar} onChange={(event) => onShowLunarChange(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Hiển thị lịch âm</span></label>
     </div>
     <div className="settings-group notification-settings">
       <div className="setting-row">
-        <div className="setting-copy"><h3>Nhắc lịch khi đã đóng tab</h3><p>Web Push gửi qua service worker. Trình duyệt chỉ hỏi quyền sau khi bạn chủ động bật.</p></div>
+        <div className="setting-copy"><h3>Nhắc lịch khi đã đóng tab</h3></div>
         <div className="notification-actions"><button className="test-notification-button" type="button" disabled={!notifications.settings.enabled || notifications.state.phase === 'testing'} onClick={notifications.testNotification}>{notifications.state.phase === 'testing' ? 'Đang gửi…' : 'Gửi thử'}</button><label className="switch"><input type="checkbox" checked={notifications.settings.enabled} disabled={!notifications.supported || !notifications.server.available} onChange={(event) => notifications.toggle(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Bật Web Push</span></label></div>
       </div>
       <label className="lead-setting">Nhắc trước
@@ -197,7 +193,6 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, not
         </select>
       </label>
       <p className={`notification-status ${notifications.state.phase === 'error' || notifications.state.phase === 'needs-action' ? 'warning' : ''}`} role="status">{notifications.availability}</p>
-      <p className="field-help">Quyền: {typeof Notification === 'undefined' ? 'không hỗ trợ' : Notification.permission} · Máy chủ: {notifications.server.loading ? 'đang kiểm tra' : notifications.server.available ? 'sẵn sàng' : 'chưa cấu hình'} · Trình duyệt: {notifications.supported ? 'hỗ trợ' : 'không hỗ trợ'}</p>
     </div>
   </section>
 }

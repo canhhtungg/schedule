@@ -192,17 +192,24 @@ async function publishEncrypted(qstash, config, payload, nowMs) {
   if (!current) return null
   const { delaySeconds } = nextDelivery(current.remindAt, nowMs)
   const body = encryptPayload(payload, config.NOTIFICATION_PAYLOAD_KEY)
-  const result = await qstash.publishJSON({
-    url: `${config.APP_ORIGIN}/api/notifications/deliver`,
-    body,
-    delay: delaySeconds,
-    retries: 3,
-    timeout: 30,
-    deduplicationId: `${payload.chainId}-${payload.index}-${payload.hop}`,
-    label: labelFor(payload.chainId),
-    redact: { body: true },
-  })
-  return result.messageId
+  try {
+    // Keep optional QStash settings minimal so this works on the free plan. The
+    // body is already AES-256-GCM ciphertext, so dashboard redaction is not needed.
+    const result = await qstash.publishJSON({
+      url: `${config.APP_ORIGIN}/api/notifications/deliver`,
+      body,
+      delay: delaySeconds,
+      deduplicationId: `${payload.chainId}-${payload.index}-${payload.hop}`,
+      label: labelFor(payload.chainId),
+    })
+    return result.messageId
+  } catch (error) {
+    const status = Number(error?.status)
+    if (status === 401 || status === 403) throw new NotificationApiError(502, 'QSTASH_AUTH_FAILED', 'QStash từ chối token lập lịch.')
+    if (status === 429) throw new NotificationApiError(503, 'QSTASH_QUOTA_EXCEEDED', 'QStash đã vượt giới hạn gửi hiện tại.')
+    if (status >= 400 && status < 500) throw new NotificationApiError(502, 'QSTASH_REQUEST_REJECTED', `QStash từ chối yêu cầu lập lịch (${status}).`)
+    throw new NotificationApiError(502, 'QSTASH_UNAVAILABLE', 'Không thể kết nối tới QStash để lập lịch.')
+  }
 }
 
 function handleError(response, error) {

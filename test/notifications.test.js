@@ -119,11 +119,28 @@ test('schedule validates browser input, cancels prior chain, and publishes encry
   assert.equal(res.payload.count, 1)
   assert.equal(published.length, 1)
   assert.equal(published[0].delay, MAX_RELAY_SECONDS)
-  assert.equal(published[0].redact.body, true)
+  assert.equal(published[0].redact, undefined)
+  assert.equal(published[0].timeout, undefined)
   assert.equal(published[0].url, `${ENV.APP_ORIGIN}/api/notifications/deliver`)
   assert.equal(decryptPayload(published[0].body, PAYLOAD_KEY).subscription.endpoint, subscription().endpoint)
   assert.deepEqual(cancelled[0], 'msg_old')
   assert.deepEqual(cancelled[1], { filter: { label: `notification-chain-${'1'.repeat(32)}` } })
+})
+
+test('schedule maps QStash plan and authentication failures safely', async () => {
+  for (const [status, code] of [[401, 'QSTASH_AUTH_FAILED'], [429, 'QSTASH_QUOTA_EXCEEDED'], [400, 'QSTASH_REQUEST_REJECTED']]) {
+    const qstash = {
+      messages: { cancel: async () => {} },
+      publishJSON: async () => { throw Object.assign(new Error('upstream details'), { status }) },
+    }
+    const handler = createNotificationScheduleHandler({ env: ENV, qstash, now: () => Date.parse('2026-09-30T00:00:00Z') })
+    const res = await invoke(handler, {
+      body: { subscription: subscription(), leadMinutes: 30, events: [{ id: 'one', date: '2026-10-02', time: '08:00', title: 'Mật mã' }] },
+      headers: browserHeaders(),
+    })
+    assert.equal(res.payload.code, code)
+    assert.doesNotMatch(res.payload.message, /upstream details/)
+  }
 })
 
 test('schedule rejects cross-origin and invalid lead time before publishing', async () => {
