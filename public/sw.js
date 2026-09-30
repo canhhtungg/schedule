@@ -1,4 +1,4 @@
-const CACHE = 'kma-planner-v7'
+const CACHE = 'kma-planner-v8'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/system-logo.png', '/system-logo-512.png']
 
 self.addEventListener('install', (event) => {
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let payload = {}
   try { payload = event.data?.json() || {} } catch { payload = {} }
-  const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : 'KMA Planner báo có lịch'
+  const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : 'KMA Planner'
   const options = {
     body: typeof payload.body === 'string' ? payload.body : 'Bạn có một lịch sắp bắt đầu.',
     icon: '/system-logo-512.png',

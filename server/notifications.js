@@ -98,8 +98,8 @@ export function nextDelivery(reminderAtMs, nowMs = Date.now()) {
 export function notificationForReminder(reminder, chainId) {
   const eventLine = reminder.room ? `${reminder.title} · ${reminder.room}` : reminder.title
   return {
-    title: 'KMA Planner báo có lịch',
-    body: `${eventLine}\nLúc ${reminder.time}`,
+    title: eventLine,
+    body: `Lúc ${reminder.time}`,
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
     tag: `schedule-${chainId}-${reminder.id}-${reminder.remindAt}`.slice(0, 240),
@@ -109,8 +109,8 @@ export function notificationForReminder(reminder, chainId) {
 
 export function notificationForTest(nowMs = Date.now()) {
   return {
-    title: 'KMA Planner báo có lịch',
-    body: 'Thông báo thử\nNgay bây giờ',
+    title: 'Thông báo thử',
+    body: 'Ngay bây giờ',
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
     tag: `notification-test-${nowMs}`,
