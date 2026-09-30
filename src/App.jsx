@@ -3,6 +3,8 @@ import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, same
 import { deleteEvent, saveEvent } from './scheduleUtils.js'
 import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
 import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
+import { NOTIFICATION_LEADS } from './notificationSettings.js'
+import { useScheduleNotifications } from './useScheduleNotifications.js'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -71,12 +73,12 @@ function Login({ onLogin }) {
 
   return <main className="login-page">
     <section className="login-story" aria-label="Giới thiệu">
-      <div className="brand brand-light"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span></div>
+      <div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span></div>
       <div className="story-copy"><p className="eyebrow">LỊCH HỌC, GỌN GÀNG HƠN</p><h1>Một tuần rõ ràng.<br/>Một ngày chủ động.</h1><p>Theo dõi môn học, phòng học và thời gian trong một không gian tập trung.</p><div className="mini-calendar" aria-hidden="true"><span className="mini-label">TUẦN NÀY</span>{[12, 13, 14, 15, 16].map((day, index) => <span className={index === 2 ? 'active' : ''} key={day}>{day}</span>)}</div></div>
       <p className="story-note">Dữ liệu của bạn chỉ được xử lý trong ứng dụng</p>
     </section>
     <section className="login-panel"><div className="login-box">
-      <div className="brand brand-dark mobile-brand"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span></div>
+      <div className="brand brand-dark mobile-brand"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span></div>
       <p className="eyebrow">CHÀO MỪNG TRỞ LẠI</p><h2>Mở lịch học</h2>
       <p className="muted">Đăng nhập QLĐT hoặc tự nhập file/HTML thời khóa biểu, không qua API bên thứ ba.</p>
       <form onSubmit={submit}>
@@ -157,7 +159,7 @@ function EventDetails({ selected, events, onAdd, onEdit, onDelete }) {
   </aside>
 }
 
-function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, onBack }) {
+function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, notifications, onBack }) {
   const themes = [
     { value: 'light', label: 'Sáng', description: 'Giao diện sáng, rõ nét' },
     { value: 'dark', label: 'Tối', description: 'Dịu mắt trong môi trường tối' },
@@ -182,11 +184,25 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, onB
       <div className="setting-copy"><h3>Hiển thị lịch âm</h3><p>Hiện ngày âm trên mọi ô lịch. Khi tắt, mùng 1 và ngày 15 vẫn được đánh dấu và hiển thị.</p></div>
       <label className="switch"><input type="checkbox" checked={showLunar} onChange={(event) => onShowLunarChange(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Hiển thị lịch âm</span></label>
     </div>
+    <div className="settings-group notification-settings">
+      <div className="setting-row">
+        <div className="setting-copy"><h3>Nhắc lịch khi đã đóng tab</h3><p>Web Push gửi qua service worker. Trình duyệt chỉ hỏi quyền sau khi bạn chủ động bật.</p></div>
+        <label className="switch"><input type="checkbox" checked={notifications.settings.enabled} disabled={!notifications.supported || !notifications.server.available} onChange={(event) => notifications.toggle(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Bật Web Push</span></label>
+      </div>
+      <label className="lead-setting">Nhắc trước
+        <select value={notifications.settings.leadMinutes} disabled={!notifications.settings.enabled} onChange={(event) => notifications.changeLead(Number(event.target.value))}>
+          {NOTIFICATION_LEADS.map((minutes) => <option value={minutes} key={minutes}>{minutes} phút</option>)}
+        </select>
+      </label>
+      <p className={`notification-status ${notifications.state.phase === 'error' || notifications.state.phase === 'needs-action' ? 'warning' : ''}`} role="status">{notifications.availability}</p>
+      <p className="field-help">Quyền: {typeof Notification === 'undefined' ? 'không hỗ trợ' : Notification.permission} · Máy chủ: {notifications.server.loading ? 'đang kiểm tra' : notifications.server.available ? 'sẵn sàng' : 'chưa cấu hình'} · Trình duyệt: {notifications.supported ? 'hỗ trợ' : 'không hỗ trợ'}</p>
+    </div>
   </section>
 }
 
 function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange, theme, onThemeChange, showLunar, onShowLunarChange }) {
-  const today = new Date()
+  const requestedDate = parseDateKey(new URLSearchParams(window.location.search).get('date'))
+  const today = requestedDate || new Date()
   const [cursor, setCursor] = useState(today)
   const [selected, setSelected] = useState(today)
   const [events, setEvents] = useState(initialEvents)
@@ -194,6 +210,7 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const [page, setPage] = useState('calendar')
   const [menuOpen, setMenuOpen] = useState(false)
   const [modalEvent, setModalEvent] = useState(undefined)
+  const notifications = useScheduleNotifications(events)
 
   const selectDate = (date) => { setSelected(date); setCursor(date) }
   const move = (direction) => selectDate(view === 'month' ? shiftMonth(selected, direction) : addDays(selected, direction * 7))
@@ -208,15 +225,16 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const weekEnd = addDays(startOfWeek(cursor), 6)
   const periodLabel = view === 'month' ? `${MONTH_NAMES[cursor.getMonth()]} / ${cursor.getFullYear()}` : `${pad(startOfWeek(cursor).getDate())}/${pad(startOfWeek(cursor).getMonth()+1)} – ${pad(weekEnd.getDate())}/${pad(weekEnd.getMonth()+1)}`
   const openPage = (nextPage) => { setPage(nextPage); setMenuOpen(false) }
+  const logout = async () => { await notifications.shutdown(); onLogout() }
 
   return <div className="app-shell">
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={onLogout} aria-label={`Đăng xuất tài khoản ${user}`}><span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
     <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'CAMPUS PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
       {page === 'calendar' ? <>
         <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
         <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
-      </> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} onBack={() => openPage('calendar')}/>}
+      </> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>

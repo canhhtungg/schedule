@@ -3,6 +3,7 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createHealthHandler, createImportScheduleHandler, createScheduleHandler } from './apiHandlers.js'
+import { createNotificationCancelHandler, createNotificationConfigHandler, createNotificationDeliverHandler, createNotificationScheduleHandler } from './notificationHandlers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -22,11 +23,19 @@ app.use((_, response, next) => {
 })
 // Import requests may contain a base64-encoded 3 MB workbook. Each handler still
 // enforces its own, narrower decoded/body limits.
-app.use(express.json({ limit: '5mb', strict: true }))
+app.use(express.json({
+  limit: '5mb',
+  strict: true,
+  verify: (request, _response, buffer) => { request.rawBody = Buffer.from(buffer) },
+}))
 
 app.get('/api/health', createHealthHandler())
 app.post('/api/login/schedule', createScheduleHandler())
 app.post('/api/import/schedule', createImportScheduleHandler())
+app.get('/api/notifications/config', createNotificationConfigHandler())
+app.post('/api/notifications/schedule', createNotificationScheduleHandler())
+app.post('/api/notifications/cancel', createNotificationCancelHandler())
+app.post('/api/notifications/deliver', createNotificationDeliverHandler())
 
 if (process.env.NODE_ENV === 'production') {
   const indexHtml = readFileSync(path.join(rootDir, 'dist', 'index.html'))
