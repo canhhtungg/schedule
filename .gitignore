@@ -5,3 +5,5 @@ dist
 .env
 .env.*
 !.env.example
+
+notification-payload-key.txt
