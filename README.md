@@ -1,6 +1,6 @@
 # KMA Schedule by CanhTung
 
-Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN, hiển thị tháng/tuần hiện tại, lịch âm Việt Nam và cho phép thêm/sửa/xóa sự kiện trong phiên hiện tại. Tab **Cài đặt** trong sidebar hỗ trợ giao diện Sáng/Tối/Hệ thống và bật/tắt lịch âm; hai lựa chọn này được lưu cục bộ trong trình duyệt.
+Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN, hiển thị tháng/tuần hiện tại, lịch âm Việt Nam và cho phép thêm/sửa/xóa sự kiện. Lịch đang mở cùng các chỉnh sửa được lưu cục bộ để refresh không phải đăng nhập lại. Tab **Cài đặt** trong sidebar hỗ trợ giao diện Sáng/Tối/Hệ thống và bật/tắt lịch âm.
 
 - **Local:** Express ở cổng `3000`, được Vite proxy qua `/api`.
 - **Vercel:** Node.js Functions trong `api/`, không khởi động Express runtime.
@@ -30,7 +30,7 @@ Dữ liệu được gửi bằng JSON tới backend cùng origin và phân tíc
 - Mỗi response upstream có timeout và giới hạn kích thước cấu hình được.
 - API trả `Cache-Control: no-store` cùng `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options` và `Permissions-Policy`. Service worker bỏ qua toàn bộ `/api/`.
 - **QLĐT chỉ hỗ trợ HTTP.** HTTPS bảo vệ browser → app, nhưng chặng app server → `qldt.actvn.edu.vn` vẫn không được mã hóa. Chỉ nhập credentials trên deployment do bạn tin cậy và kiểm soát.
-- Không có session lâu dài. Refresh/đăng xuất sẽ xóa lịch đang mở và mọi chỉnh sửa CRUD cục bộ.
+- Hồ sơ phiên gồm mã người dùng, nguồn dữ liệu và lịch đã chỉnh sửa được lưu trong `localStorage`; **không có mật khẩu hoặc cookie QLĐT**. Refresh sẽ khôi phục lịch, còn nút đăng xuất sẽ xóa toàn bộ phiên đã lưu.
 
 ## Chạy local
 
@@ -60,7 +60,7 @@ npm audit --omit=dev
 git diff --check
 ```
 
-Test bao phủ parser HTML/workbook, giữ giảng viên khi nguồn có, import API (HTML, base64 workbook, input sai/quá cỡ), helper lịch âm, cài đặt theme/lịch âm, điều hướng ngày và CRUD thuần.
+Test bao phủ parser HTML/workbook, giữ giảng viên khi nguồn có, import API (HTML, base64 workbook, input sai/quá cỡ), helper lịch âm, cài đặt theme/lịch âm, session bền vững không chứa credentials, điều hướng ngày và CRUD thuần.
 
 ## API
 

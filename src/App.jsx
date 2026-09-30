@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, sameDay, shiftMonth, startOfWeek, vietnameseLunarDate } from './calendarUtils.js'
 import { deleteEvent, saveEvent } from './scheduleUtils.js'
 import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
+import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -184,7 +185,7 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, onB
   </section>
 }
 
-function Schedule({ user, events: initialEvents, mode, onLogout, theme, onThemeChange, showLunar, onShowLunarChange }) {
+function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange, theme, onThemeChange, showLunar, onShowLunarChange }) {
   const today = new Date()
   const [cursor, setCursor] = useState(today)
   const [selected, setSelected] = useState(today)
@@ -197,8 +198,13 @@ function Schedule({ user, events: initialEvents, mode, onLogout, theme, onThemeC
   const selectDate = (date) => { setSelected(date); setCursor(date) }
   const move = (direction) => selectDate(view === 'month' ? shiftMonth(selected, direction) : addDays(selected, direction * 7))
   const goToday = () => selectDate(new Date())
-  const save = (draft, editingId) => { setEvents((current) => saveEvent(current, draft, editingId)); const date = parseDateKey(draft.date); if (date) selectDate(date) }
-  const remove = (event) => { if (window.confirm(`Xóa “${event.title}”?`)) setEvents((current) => deleteEvent(current, event.id)) }
+  const updateEvents = (updater) => setEvents((current) => {
+    const next = updater(current)
+    onEventsChange(next)
+    return next
+  })
+  const save = (draft, editingId) => { updateEvents((current) => saveEvent(current, draft, editingId)); const date = parseDateKey(draft.date); if (date) selectDate(date) }
+  const remove = (event) => { if (window.confirm(`Xóa “${event.title}”?`)) updateEvents((current) => deleteEvent(current, event.id)) }
   const weekEnd = addDays(startOfWeek(cursor), 6)
   const periodLabel = view === 'month' ? `${MONTH_NAMES[cursor.getMonth()]} / ${cursor.getFullYear()}` : `${pad(startOfWeek(cursor).getDate())}/${pad(startOfWeek(cursor).getMonth()+1)} – ${pad(weekEnd.getDate())}/${pad(weekEnd.getMonth()+1)}`
   const openPage = (nextPage) => { setPage(nextPage); setMenuOpen(false) }
@@ -217,7 +223,8 @@ function Schedule({ user, events: initialEvents, mode, onLogout, theme, onThemeC
 }
 
 export default function App() {
-  const [session, setSession] = useState(null)
+  const storage = globalThis.localStorage
+  const [session, setSession] = useState(() => readStoredSession(storage))
   const [theme, setTheme] = useState(() => readThemeSetting(globalThis.localStorage))
   const [showLunar, setShowLunar] = useState(() => readShowLunarSetting(globalThis.localStorage))
   useEffect(() => {
@@ -236,7 +243,15 @@ export default function App() {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, cache: 'no-store', body: JSON.stringify(body) })
     const payload = await response.json().catch(() => null)
     if (!response.ok) throw new Error(payload?.message || 'Không thể tải lịch học. Vui lòng thử lại.')
-    setSession(payload)
+    const persisted = writeStoredSession(storage, payload)
+    setSession(persisted || payload)
   }
-  return session ? <Schedule {...session} theme={theme} onThemeChange={changeTheme} showLunar={showLunar} onShowLunarChange={changeShowLunar} onLogout={() => setSession(null)}/> : <Login onLogin={login}/>
+  const updateSessionEvents = (events) => setSession((current) => {
+    if (!current) return current
+    const next = { ...current, events }
+    writeStoredSession(storage, next)
+    return next
+  })
+  const logout = () => { clearStoredSession(storage); setSession(null) }
+  return session ? <Schedule {...session} theme={theme} onThemeChange={changeTheme} showLunar={showLunar} onShowLunarChange={changeShowLunar} onEventsChange={updateSessionEvents} onLogout={logout}/> : <Login onLogin={login}/>
 }
