@@ -166,10 +166,41 @@ function labelFor(chainId) {
   return `notification-chain-${chainId}`
 }
 
+function createQstashService(config, clientFactory = (options) => new Client(options)) {
+  const configuredUrl = typeof config.QSTASH_URL === 'string' ? config.QSTASH_URL.trim().replace(/\/$/, '') : ''
+  const baseUrls = [...new Set([
+    configuredUrl,
+    'https://qstash.upstash.io',
+    'https://qstash-us-east-1.upstash.io',
+    'https://qstash-eu-central-1.upstash.io',
+  ].filter(Boolean))]
+  const clients = baseUrls.map((baseUrl) => clientFactory({ token: config.QSTASH_TOKEN.trim(), baseUrl, enableTelemetry: false }))
+  return {
+    async publishJSON(request) {
+      let notFoundError
+      for (const client of clients) {
+        try { return await client.publishJSON(request) } catch (error) {
+          if (Number(error?.status) !== 404) throw error
+          notFoundError = error
+        }
+      }
+      throw notFoundError || new Error('QStash endpoint unavailable')
+    },
+    messages: {
+      async cancel(value) {
+        const results = await Promise.allSettled(clients.map((client) => client.messages.cancel(value)))
+        const success = results.find((result) => result.status === 'fulfilled')
+        if (success) return success.value
+        throw results[0]?.reason || new Error('QStash cancellation unavailable')
+      },
+    },
+  }
+}
+
 function createServices(config, dependencies) {
   return {
-    qstash: dependencies.qstash || new Client({ token: config.QSTASH_TOKEN, enableTelemetry: false }),
-    receiver: dependencies.receiver || new Receiver({ currentSigningKey: config.QSTASH_CURRENT_SIGNING_KEY, nextSigningKey: config.QSTASH_NEXT_SIGNING_KEY }),
+    qstash: dependencies.qstash || createQstashService(config, dependencies.qstashClientFactory),
+    receiver: dependencies.receiver || new Receiver({ currentSigningKey: config.QSTASH_CURRENT_SIGNING_KEY.trim(), nextSigningKey: config.QSTASH_NEXT_SIGNING_KEY.trim() }),
     sendPush: dependencies.sendPush || ((subscription, payload) => webPush.sendNotification(subscription, JSON.stringify(payload), {
       TTL: 60 * 60,
       urgency: 'high',

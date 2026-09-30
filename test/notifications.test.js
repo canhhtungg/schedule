@@ -127,6 +127,29 @@ test('schedule validates browser input, cancels prior chain, and publishes encry
   assert.deepEqual(cancelled[1], { filter: { label: `notification-chain-${'1'.repeat(32)}` } })
 })
 
+test('schedule falls back from the legacy QStash URL to the token region', async () => {
+  const attempted = []
+  const handler = createNotificationScheduleHandler({
+    env: ENV,
+    now: () => Date.parse('2026-09-30T00:00:00Z'),
+    qstashClientFactory: ({ baseUrl }) => ({
+      messages: { cancel: async () => ({ cancelled: 0 }) },
+      publishJSON: async () => {
+        attempted.push(baseUrl)
+        if (baseUrl === 'https://qstash.upstash.io') throw Object.assign(new Error('not found'), { status: 404 })
+        return { messageId: 'msg_regional' }
+      },
+    }),
+  })
+  const res = await invoke(handler, {
+    body: { subscription: subscription(), leadMinutes: 30, events: [{ id: 'one', date: '2026-10-02', time: '08:00', title: 'Mật mã' }] },
+    headers: browserHeaders(),
+  })
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.messageId, 'msg_regional')
+  assert.deepEqual(attempted, ['https://qstash.upstash.io', 'https://qstash-us-east-1.upstash.io'])
+})
+
 test('schedule maps QStash plan and authentication failures safely', async () => {
   for (const [status, code] of [[401, 'QSTASH_AUTH_FAILED'], [429, 'QSTASH_QUOTA_EXCEEDED'], [400, 'QSTASH_REQUEST_REJECTED']]) {
     const qstash = {
