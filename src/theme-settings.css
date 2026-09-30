@@ -1,0 +1,130 @@
+/* Theme tokens and settings UI are kept separate from the base layout. */
+:root {
+  color-scheme: light;
+  --page: #f4f5f7;
+  --surface: #ffffff;
+  --surface-soft: #fafafa;
+  --surface-subtle: #f0f1f4;
+  --text: #1b1d26;
+  --text-soft: #707481;
+  --border: #e6e7eb;
+  --control: #ffffff;
+  --control-hover: #fafaff;
+  --selected: #f6f5ff;
+  --lunar-highlight: #fff1f4;
+  --lunar-highlight-soft: #fff8f9;
+  --lunar-text: #ba6579;
+  --shadow: rgba(25, 29, 39, .08);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0e1118;
+  --surface: #171b24;
+  --surface-soft: #1c212c;
+  --surface-subtle: #222833;
+  --text: #edf0f6;
+  --text-soft: #a3aab8;
+  --border: #2b3240;
+  --control: #1b202a;
+  --control-hover: #222836;
+  --selected: #252442;
+  --lunar-highlight: #38232d;
+  --lunar-highlight-soft: #2c2027;
+  --lunar-text: #f3a7b8;
+  --shadow: rgba(0, 0, 0, .28);
+}
+
+body { color: var(--text); background: var(--page); }
+.login-page, .login-panel, .app-shell, .workspace { color: var(--text); background: var(--page); }
+.login-panel { background: var(--surface); }
+.login-box h2, .topbar h1, .period-nav h2, .details-heading h3, .lesson-card h4, .modal-heading h2, .settings-panel h2, .settings-panel h3 { color: var(--text); }
+.muted, .privacy-note, .field-help, .setting-copy p, .settings-heading > p { color: var(--text-soft); }
+.login-box label, .import-choice legend, .form-grid label { color: var(--text); }
+.login-box input, .login-box textarea, .form-grid input { color: var(--text); border-color: var(--border); background: var(--surface-soft); }
+.login-box input:focus, .login-box textarea:focus, .form-grid input:focus { background: var(--surface); }
+.login-box input:disabled { color: var(--text-soft); background: var(--surface-subtle); }
+.mode-toggle, .view-toggle { background: var(--surface-subtle); }
+.mode-toggle button, .view-toggle button { color: var(--text-soft); }
+.view-toggle button.active { color: var(--text); background: var(--surface); box-shadow: 0 1px 5px var(--shadow); }
+.primary-button { color: var(--surface); background: var(--ink); }
+:root[data-theme='dark'] .primary-button { color: #111827; background: #f1f3f8; }
+:root[data-theme='dark'] .primary-button:hover { background: #ffffff; }
+
+.calendar-panel, .details-panel, .event-modal { color: var(--text); border-color: var(--border); background: var(--surface); box-shadow: 0 4px 18px var(--shadow); }
+.weekday-row, .details-heading { border-color: var(--border); }
+.period-nav button, .menu-button { color: var(--text-soft); border-color: var(--border); background: var(--control); }
+.period-nav button:hover { color: var(--text); border-color: var(--text-soft); }
+.day-cell, .week-day, .lesson-card { color: var(--text); border-color: var(--border); background: var(--surface); }
+.day-cell:hover { background: var(--control-hover); }
+.day-cell.lunar-highlight, .week-day.lunar-highlight { background: var(--lunar-highlight); }
+.day-cell.selected, .week-day.selected, .day-cell.outside.selected { background: var(--selected); }
+.day-cell.outside { color: var(--text-soft); background: var(--surface-soft); }
+.day-cell.outside.lunar-highlight { background: var(--lunar-highlight-soft); }
+.day-number.today, .count-badge { color: var(--surface); background: var(--ink); }
+:root[data-theme='dark'] .day-number.today, :root[data-theme='dark'] .count-badge { color: #111827; background: #f1f3f8; }
+.lunar-date { color: var(--lunar-text); }
+.week-day header { color: var(--text-soft); border-color: var(--border); }
+.week-day header strong { color: var(--text); }
+.lesson-card p, .subject-code, .empty-state, .empty-slot { color: var(--text-soft); }
+.lesson-actions button, .icon-button { color: var(--text-soft); background: var(--surface-subtle); }
+.empty-state h4 { color: var(--text); }
+.empty-state > span { background: var(--selected); }
+.modal-actions button { color: var(--text-soft); background: var(--surface-subtle); }
+.modal-actions .save-button, .add-event { color: #fff; background: var(--violet); }
+
+.settings-panel { max-width: 980px; margin: 0 auto; }
+.settings-heading { margin-bottom: 22px; }
+.settings-heading h2 { margin: 5px 0 7px; font: 600 34px/1.1 'Newsreader', serif; }
+.settings-heading > p { margin: 0; font-size: 12px; }
+.back-button { display: inline-flex; margin: 0 0 24px; padding: 0; align-items: center; gap: 6px; color: var(--text-soft); background: transparent; font-size: 11px; font-weight: 800; }
+.back-button:hover { color: var(--text); }
+.settings-group { display: grid; margin-bottom: 14px; padding: 22px; grid-template-columns: minmax(180px, 240px) 1fr; gap: 28px; align-items: start; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 3px 14px var(--shadow); }
+.setting-copy h3 { margin: 0 0 7px; font-size: 14px; }
+.setting-copy p { margin: 0; font-size: 11px; line-height: 1.6; }
+.theme-options { display: grid; margin: 0; padding: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; border: 0; }
+.theme-options > label { position: relative; display: grid; min-width: 0; padding: 12px; gap: 9px; border: 1px solid var(--border); border-radius: 11px; cursor: pointer; background: var(--surface-soft); }
+.theme-options > label.selected { border-color: var(--violet); box-shadow: 0 0 0 2px rgba(91, 92, 226, .14); }
+.theme-options input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.theme-options strong, .theme-options small { display: block; }
+.theme-options strong { color: var(--text); font-size: 11px; }
+.theme-options small { margin-top: 3px; color: var(--text-soft); font-size: 8px; line-height: 1.4; }
+.theme-preview { display: grid; height: 54px; padding: 8px; grid-template-columns: 30% 1fr; grid-template-rows: 1fr 1fr; gap: 5px; border: 1px solid #dfe2e8; border-radius: 7px; background: #f4f5f7; }
+.theme-preview i { display: block; border-radius: 3px; background: #ffffff; }
+.theme-preview i:first-child { grid-row: span 2; background: #1b2230; }
+.theme-preview.dark { border-color: #343b49; background: #0e1118; }
+.theme-preview.dark i { background: #242a35; }
+.theme-preview.dark i:first-child { background: #080a0f; }
+.theme-preview.system { background: linear-gradient(135deg, #f4f5f7 0 50%, #0e1118 50% 100%); }
+.setting-row { align-items: center; }
+.switch { position: relative; display: inline-flex; width: 48px; height: 28px; margin-left: auto; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; }
+.switch > span[aria-hidden] { width: 100%; border-radius: 999px; background: var(--surface-subtle); box-shadow: inset 0 0 0 1px var(--border); transition: .2s; }
+.switch > span[aria-hidden]::after { content: ''; position: absolute; width: 20px; height: 20px; left: 4px; top: 4px; border-radius: 50%; background: var(--surface); box-shadow: 0 2px 7px var(--shadow); transition: .2s; }
+.switch input:checked + span { background: var(--violet); box-shadow: none; }
+.switch input:checked + span::after { transform: translateX(20px); background: #fff; }
+.switch input:focus-visible + span { outline: 3px solid rgba(91, 92, 226, .3); outline-offset: 2px; }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+
+@media (max-width: 760px) {
+  .sidebar { overflow-y: auto; }
+  .sidebar nav { flex: 0 0 auto; }
+  .profile { min-height: 62px; flex: 0 0 auto; }
+  .menu-button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--border); border-radius: 9px; }
+  .settings-heading h2 { font-size: 29px; }
+  .settings-group { grid-template-columns: 1fr; gap: 16px; padding: 17px; }
+  .theme-options { grid-template-columns: 1fr; }
+  .theme-options > label { grid-template-columns: 80px 1fr; align-items: center; }
+  .theme-preview { height: 46px; }
+  .setting-row { grid-template-columns: 1fr auto; }
+
+  .week-view { width: 100%; min-height: 430px; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow-x: hidden; }
+  .week-day { min-width: 0; overflow: hidden; }
+  .week-day header { height: 82px; padding: 5px 1px; }
+  .week-day header .lunar-date { max-width: 100%; overflow: hidden; font-size: 6px; text-overflow: ellipsis; }
+  .week-events { padding: 3px 2px; gap: 4px; }
+  .week-event { min-width: 0; min-height: 62px; padding: 5px 3px; overflow: hidden; font-size: 7px; line-height: 1.3; }
+  .week-event b { margin-bottom: 3px; font-size: 6px; }
+  .week-event-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
+  .week-event small { display: none; }
+}

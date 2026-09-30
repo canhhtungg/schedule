@@ -34,9 +34,12 @@ export function vietnameseLunarDate(date) {
   }
 }
 
-export function lunarLabel(date) {
+export function lunarLabel(date, { showLunar = true } = {}) {
   const lunar = vietnameseLunarDate(date)
-  return lunar.day === 1 ? `1/${lunar.month}${lunar.leap ? 'N' : ''}` : String(lunar.day)
+  const highlighted = lunar.day === 1 || lunar.day === 15
+  if (!showLunar && !highlighted) return null
+  if (lunar.day === 1 || (!showLunar && highlighted)) return `${lunar.day}/${lunar.month}${lunar.leap ? 'N' : ''}`
+  return String(lunar.day)
 }
 
 export function isLunarHighlight(date) {

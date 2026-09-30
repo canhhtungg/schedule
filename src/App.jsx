@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, sameDay, shiftMonth, startOfWeek, vietnameseLunarDate } from './calendarUtils.js'
 import { deleteEvent, saveEvent } from './scheduleUtils.js'
+import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -19,6 +20,7 @@ const Icon = ({ name, size = 20 }) => {
     arrow: <path d="M5 12h14M13 6l6 6-6 6"/>,
     book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></>,
     plus: <path d="M12 5v14M5 12h14"/>, edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></>, trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/></>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
   }
   return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -93,12 +95,13 @@ function Login({ onLogin }) {
   </main>
 }
 
-function LunarStamp({ day }) {
+function LunarStamp({ day, showLunar }) {
   const lunar = vietnameseLunarDate(day)
-  return <span className="lunar-date" title={`Âm lịch: ${lunar.day}/${lunar.month}/${lunar.year}`}>ÂL {lunarLabel(day)}</span>
+  const label = lunarLabel(day, { showLunar })
+  return label ? <span className="lunar-date" title={`Âm lịch: ${lunar.day}/${lunar.month}/${lunar.year}`}>{label}</span> : null
 }
 
-function MonthView({ cursor, events, selected, onSelect }) {
+function MonthView({ cursor, events, selected, onSelect, showLunar }) {
   const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
   const gridStart = addDays(start, -((start.getDay() + 6) % 7))
   const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
@@ -107,7 +110,7 @@ function MonthView({ cursor, events, selected, onSelect }) {
       const dayEvents = events.filter((event) => event.date === dateKey(day))
       const lunar = vietnameseLunarDate(day)
       return <button aria-label={`${dateKey(day)}, âm lịch ${lunar.day}/${lunar.month}`} className={`day-cell ${day.getMonth() !== cursor.getMonth() ? 'outside' : ''} ${isLunarHighlight(day) ? 'lunar-highlight' : ''} ${sameDay(day, selected) ? 'selected' : ''}`} key={dateKey(day)} onClick={() => onSelect(day)}>
-        <span className="date-heading"><span className={`day-number ${sameDay(day, new Date()) ? 'today' : ''}`}>{day.getDate()}</span><LunarStamp day={day}/></span>
+        <span className="date-heading"><span className={`day-number ${sameDay(day, new Date()) ? 'today' : ''}`}>{day.getDate()}</span><LunarStamp day={day} showLunar={showLunar}/></span>
         <span className="events-stack">{dayEvents.slice(0, 2).map((event) => <span className={`event-pill ${event.color}`} key={event.id}><i />{event.time ? `${event.time.split(' ')[0]} ` : ''}{event.title}</span>)}{dayEvents.length > 2 && <span className="more-events">+{dayEvents.length - 2} lịch khác</span>}</span>
         {dayEvents.length > 0 && <span className="mobile-dots">{dayEvents.map((event) => <i className={event.color} key={event.id} />)}</span>}
       </button>
@@ -115,13 +118,14 @@ function MonthView({ cursor, events, selected, onSelect }) {
   </div></div>
 }
 
-function WeekView({ cursor, events, selected, onSelect }) {
+function WeekView({ cursor, events, selected, onSelect, showLunar }) {
   const start = startOfWeek(cursor)
   return <div className="week-view">{Array.from({ length: 7 }, (_, index) => addDays(start, index)).map((day) => {
     const dayEvents = events.filter((event) => event.date === dateKey(day))
-    return <button className={`week-day ${isLunarHighlight(day) ? 'lunar-highlight' : ''} ${sameDay(day, selected) ? 'selected' : ''}`} key={dateKey(day)} onClick={() => onSelect(day)}>
-      <header><span>{DAY_NAMES[(day.getDay() + 6) % 7]}</span><strong className={sameDay(day, new Date()) ? 'today' : ''}>{day.getDate()}</strong><LunarStamp day={day}/></header>
-      <div className="week-events">{dayEvents.length ? dayEvents.map((event) => <span className={`week-event ${event.color}`} key={event.id}>{event.time && <b>{event.time.split(' ')[0]}</b>}{event.title}{event.room && <small>{event.room}</small>}</span>) : <span className="empty-slot">Trống</span>}</div>
+    const selectedDay = sameDay(day, selected)
+    return <button aria-label={`${dateKey(day)}, ${dayEvents.length} sự kiện`} aria-current={selectedDay ? 'date' : undefined} className={`week-day ${isLunarHighlight(day) ? 'lunar-highlight' : ''} ${selectedDay ? 'selected' : ''}`} data-date={dateKey(day)} key={dateKey(day)} onClick={() => onSelect(day)}>
+      <header><span>{DAY_NAMES[(day.getDay() + 6) % 7]}</span><strong className={sameDay(day, new Date()) ? 'today' : ''}>{day.getDate()}</strong><LunarStamp day={day} showLunar={showLunar}/></header>
+      <div className="week-events">{dayEvents.length ? dayEvents.map((event) => <span className={`week-event ${event.color}`} key={event.id}>{event.time && <b>{event.time.split(' ')[0]}</b>}<span className="week-event-title">{event.title}</span>{event.room && <small>{event.room}</small>}</span>) : <span className="empty-slot">Trống</span>}</div>
     </button>
   })}</div>
 }
@@ -152,12 +156,41 @@ function EventDetails({ selected, events, onAdd, onEdit, onDelete }) {
   </aside>
 }
 
-function Schedule({ user, events: initialEvents, mode, onLogout }) {
+function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, onBack }) {
+  const themes = [
+    { value: 'light', label: 'Sáng', description: 'Giao diện sáng, rõ nét' },
+    { value: 'dark', label: 'Tối', description: 'Dịu mắt trong môi trường tối' },
+    { value: 'system', label: 'Hệ thống', description: 'Tự động theo thiết bị' },
+  ]
+  return <section className="settings-panel" aria-labelledby="settings-title">
+    <div className="settings-heading">
+      <button className="back-button" type="button" onClick={onBack}><Icon name="chevronLeft" size={17}/>Quay lại Lịch học</button>
+      <p className="eyebrow">TÙY CHỈNH TRẢI NGHIỆM</p>
+      <h2 id="settings-title">Cài đặt</h2>
+      <p>Mọi lựa chọn chỉ được lưu trên trình duyệt này.</p>
+    </div>
+    <div className="settings-group">
+      <div className="setting-copy"><h3>Giao diện</h3><p>Chọn màu sắc phù hợp hoặc đồng bộ với hệ điều hành.</p></div>
+      <fieldset className="theme-options"><legend className="sr-only">Chọn giao diện</legend>{themes.map((option) => <label className={theme === option.value ? 'selected' : ''} key={option.value}>
+        <input type="radio" name="theme" value={option.value} checked={theme === option.value} onChange={() => onThemeChange(option.value)} />
+        <span className={`theme-preview ${option.value}`} aria-hidden="true"><i/><i/><i/></span>
+        <span><strong>{option.label}</strong><small>{option.description}</small></span>
+      </label>)}</fieldset>
+    </div>
+    <div className="settings-group setting-row">
+      <div className="setting-copy"><h3>Hiển thị lịch âm</h3><p>Hiện ngày âm trên mọi ô lịch. Khi tắt, mùng 1 và ngày 15 vẫn được đánh dấu và hiển thị.</p></div>
+      <label className="switch"><input type="checkbox" checked={showLunar} onChange={(event) => onShowLunarChange(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Hiển thị lịch âm</span></label>
+    </div>
+  </section>
+}
+
+function Schedule({ user, events: initialEvents, mode, onLogout, theme, onThemeChange, showLunar, onShowLunarChange }) {
   const today = new Date()
   const [cursor, setCursor] = useState(today)
   const [selected, setSelected] = useState(today)
   const [events, setEvents] = useState(initialEvents)
   const [view, setView] = useState('month')
+  const [page, setPage] = useState('calendar')
   const [menuOpen, setMenuOpen] = useState(false)
   const [modalEvent, setModalEvent] = useState(undefined)
 
@@ -168,13 +201,16 @@ function Schedule({ user, events: initialEvents, mode, onLogout }) {
   const remove = (event) => { if (window.confirm(`Xóa “${event.title}”?`)) setEvents((current) => deleteEvent(current, event.id)) }
   const weekEnd = addDays(startOfWeek(cursor), 6)
   const periodLabel = view === 'month' ? `${MONTH_NAMES[cursor.getMonth()]} / ${cursor.getFullYear()}` : `${pad(startOfWeek(cursor).getDate())}/${pad(startOfWeek(cursor).getMonth()+1)} – ${pad(weekEnd.getDate())}/${pad(weekEnd.getMonth()+1)}`
+  const openPage = (nextPage) => { setPage(nextPage); setMenuOpen(false) }
 
   return <div className="app-shell">
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`}><div className="brand brand-light"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className="nav-item active"><Icon name="calendar"/>Lịch học</button><button className="nav-item"><Icon name="grid"/>Tổng quan<span className="soon">Sắp có</span></button></nav><button className="profile" onClick={onLogout}><span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><Icon name="calendar" /></span><span>Campus Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><nav><button className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/>Lịch học</button><button className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/>Cài đặt</button></nav><button className="profile" onClick={onLogout} aria-label={`Đăng xuất tài khoản ${user}`}><span className="avatar">{user.slice(0, 2)}</span><span><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
-    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">THỜI KHOÁ BIỂU</p><h1>Lịch học của bạn</h1></div><button className="logout-mobile" onClick={onLogout} aria-label="Đăng xuất"><Icon name="logout"/></button></header>
-      <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
-      <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
+    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'CAMPUS PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
+      {page === 'calendar' ? <>
+        <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
+        <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
+      </> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>
@@ -182,11 +218,25 @@ function Schedule({ user, events: initialEvents, mode, onLogout }) {
 
 export default function App() {
   const [session, setSession] = useState(null)
+  const [theme, setTheme] = useState(() => readThemeSetting(globalThis.localStorage))
+  const [showLunar, setShowLunar] = useState(() => readShowLunarSetting(globalThis.localStorage))
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const resolved = applyThemeSetting(document.documentElement, theme, media.matches)
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#11151f' : '#f4f5f7')
+    }
+    apply()
+    if (theme === 'system') media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [theme])
+  const changeTheme = (value) => setTheme(saveThemeSetting(globalThis.localStorage, value))
+  const changeShowLunar = (value) => setShowLunar(saveShowLunarSetting(globalThis.localStorage, value))
   const login = async (endpoint, body) => {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, cache: 'no-store', body: JSON.stringify(body) })
     const payload = await response.json().catch(() => null)
     if (!response.ok) throw new Error(payload?.message || 'Không thể tải lịch học. Vui lòng thử lại.')
     setSession(payload)
   }
-  return session ? <Schedule {...session} onLogout={() => setSession(null)}/> : <Login onLogin={login}/>
+  return session ? <Schedule {...session} theme={theme} onThemeChange={changeTheme} showLunar={showLunar} onShowLunarChange={changeShowLunar} onLogout={() => setSession(null)}/> : <Login onLogin={login}/>
 }

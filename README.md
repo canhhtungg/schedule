@@ -1,6 +1,6 @@
 # KMA Schedule by CanhTung
 
-Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN, hiển thị tháng/tuần hiện tại, lịch âm Việt Nam và cho phép thêm/sửa/xóa sự kiện trong phiên hiện tại.
+Ứng dụng full-stack React/Vite đọc thời khóa biểu ACTVN, hiển thị tháng/tuần hiện tại, lịch âm Việt Nam và cho phép thêm/sửa/xóa sự kiện trong phiên hiện tại. Tab **Cài đặt** trong sidebar hỗ trợ giao diện Sáng/Tối/Hệ thống và bật/tắt lịch âm; hai lựa chọn này được lưu cục bộ trong trình duyệt.
 
 - **Local:** Express ở cổng `3000`, được Vite proxy qua `/api`.
 - **Vercel:** Node.js Functions trong `api/`, không khởi động Express runtime.
@@ -60,7 +60,7 @@ npm audit --omit=dev
 git diff --check
 ```
 
-Test bao phủ parser HTML/workbook, giữ giảng viên khi nguồn có, import API (HTML, base64 workbook, input sai/quá cỡ), helper lịch âm, điều hướng ngày và CRUD thuần.
+Test bao phủ parser HTML/workbook, giữ giảng viên khi nguồn có, import API (HTML, base64 workbook, input sai/quá cỡ), helper lịch âm, cài đặt theme/lịch âm, điều hướng ngày và CRUD thuần.
 
 ## API
 
@@ -106,7 +106,7 @@ Một lần tải QLĐT thực hiện nhiều request HTTP tuần tự. Upstream
 2. `server/parser.js` và `server/workbookParser.js` đọc HTML/workbook, chuẩn hóa và loại trùng sự kiện.
 3. `server/apiHandlers.js` cung cấp handler dùng chung cho Express và Vercel, gồm validation/headers/giới hạn body.
 4. `api/login/schedule.js` và `api/import/schedule.js` là Vercel Functions tương ứng.
-5. `src/calendarUtils.js` bọc `lunar-javascript` (MIT) cho lịch âm; `src/scheduleUtils.js` chứa CRUD thuần.
+5. `src/calendarUtils.js` bọc `lunar-javascript` (MIT) cho lịch âm; `src/scheduleUtils.js` chứa CRUD thuần; `src/settingsUtils.js` quản lý theme và tùy chọn lịch âm.
 
 ## Hạn chế xác minh
 
