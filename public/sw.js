@@ -1,4 +1,4 @@
-const CACHE = 'kma-planner-v9'
+const CACHE = 'kma-planner-v10'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/system-logo.png', '/system-logo-512.png']
 
 self.addEventListener('install', (event) => {
