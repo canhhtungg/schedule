@@ -116,6 +116,11 @@ body { color: var(--text); background: var(--page); }
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 
 @media (max-width: 760px) {
+  /* iOS zooms the viewport when a focused form control is smaller than 16px. */
+  .login-box input:not([type='radio']):not([type='checkbox']),
+  .login-box textarea,
+  .form-grid input,
+  .lead-setting select { font-size: 16px; }
   .sidebar { overflow-y: auto; }
   .sidebar nav { flex: 0 0 auto; }
   .profile { min-height: 62px; flex: 0 0 auto; }
