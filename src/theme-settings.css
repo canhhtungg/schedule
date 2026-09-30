@@ -108,6 +108,11 @@ body { color: var(--text); background: var(--page); }
 .switch input:disabled + span { cursor: not-allowed; opacity: .55; }
 .notification-settings { display: block; }
 .notification-settings .setting-row { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 28px; }
+.notification-actions { display: flex; align-items: center; gap: 10px; }
+.notification-actions .switch { margin-left: 0; }
+.test-notification-button { height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface-soft); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.test-notification-button:hover:not(:disabled) { color: #fff; border-color: var(--violet); background: var(--violet); }
+.test-notification-button:disabled { cursor: not-allowed; opacity: .5; }
 .lead-setting { display: flex; margin-top: 20px; align-items: center; gap: 12px; color: var(--text); font-size: 11px; font-weight: 800; }
 .lead-setting select { min-width: 120px; height: 38px; padding: 0 10px; color: var(--text); border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); }
 .lead-setting select:disabled { cursor: not-allowed; opacity: .6; }

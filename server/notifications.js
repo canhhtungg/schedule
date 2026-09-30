@@ -107,3 +107,14 @@ export function notificationForReminder(reminder, chainId) {
     data: { url: `/?date=${encodeURIComponent(reminder.date)}` },
   }
 }
+
+export function notificationForTest(nowMs = Date.now()) {
+  return {
+    title: 'KMA Planner',
+    body: 'Thông báo thử đã hoạt động trên thiết bị này.',
+    icon: '/system-logo-512.png',
+    badge: '/system-logo-512.png',
+    tag: `notification-test-${nowMs}`,
+    data: { url: '/?notification=test' },
+  }
+}

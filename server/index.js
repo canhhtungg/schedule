@@ -3,7 +3,7 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createHealthHandler, createImportScheduleHandler, createScheduleHandler } from './apiHandlers.js'
-import { createNotificationCancelHandler, createNotificationConfigHandler, createNotificationDeliverHandler, createNotificationScheduleHandler } from './notificationHandlers.js'
+import { createNotificationCancelHandler, createNotificationConfigHandler, createNotificationDeliverHandler, createNotificationScheduleHandler, createNotificationTestHandler } from './notificationHandlers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -35,6 +35,7 @@ app.post('/api/import/schedule', createImportScheduleHandler())
 app.get('/api/notifications/config', createNotificationConfigHandler())
 app.post('/api/notifications/schedule', createNotificationScheduleHandler())
 app.post('/api/notifications/cancel', createNotificationCancelHandler())
+app.post('/api/notifications/test', createNotificationTestHandler())
 app.post('/api/notifications/deliver', createNotificationDeliverHandler())
 
 if (process.env.NODE_ENV === 'production') {

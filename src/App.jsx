@@ -189,7 +189,7 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, not
     <div className="settings-group notification-settings">
       <div className="setting-row">
         <div className="setting-copy"><h3>Nhắc lịch khi đã đóng tab</h3><p>Web Push gửi qua service worker. Trình duyệt chỉ hỏi quyền sau khi bạn chủ động bật.</p></div>
-        <label className="switch"><input type="checkbox" checked={notifications.settings.enabled} disabled={!notifications.supported || !notifications.server.available} onChange={(event) => notifications.toggle(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Bật Web Push</span></label>
+        <div className="notification-actions"><button className="test-notification-button" type="button" disabled={!notifications.settings.enabled || notifications.state.phase === 'testing'} onClick={notifications.testNotification}>{notifications.state.phase === 'testing' ? 'Đang gửi…' : 'Gửi thử'}</button><label className="switch"><input type="checkbox" checked={notifications.settings.enabled} disabled={!notifications.supported || !notifications.server.available} onChange={(event) => notifications.toggle(event.target.checked)} /><span aria-hidden="true"/><span className="sr-only">Bật Web Push</span></label></div>
       </div>
       <label className="lead-setting">Nhắc trước
         <select value={notifications.settings.leadMinutes} disabled={!notifications.settings.enabled} onChange={(event) => notifications.changeLead(Number(event.target.value))}>

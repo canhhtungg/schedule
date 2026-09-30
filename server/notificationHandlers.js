@@ -8,6 +8,7 @@ import {
   encryptPayload,
   nextDelivery,
   notificationForReminder,
+  notificationForTest,
   parsePayloadKey,
   planReminders,
 } from './notifications.js'
@@ -261,6 +262,30 @@ export function createNotificationCancelHandler({ env = process.env, ...dependen
       const { qstash } = createServices(config, dependencies)
       await cancelPending(qstash, messageId, chainId)
       return sendJson(response, 200, { cancelled: true })
+    } catch (error) {
+      return handleError(response, error)
+    }
+  }
+}
+
+export function createNotificationTestHandler({ env = process.env, now = Date.now, ...dependencies } = {}) {
+  return async function notificationTestHandler(request, response) {
+    try {
+      if (methodGuard(request, response, 'POST')) return
+      const config = assertConfigured(env)
+      assertSameOrigin(request, config)
+      const body = await readJson(request, 8 * 1024)
+      const subscription = validateSubscription(body.subscription)
+      const { sendPush } = createServices(config, dependencies)
+      try {
+        await sendPush(subscription, notificationForTest(now()))
+      } catch (error) {
+        if (error?.statusCode === 404 || error?.statusCode === 410) {
+          throw new NotificationApiError(410, 'SUBSCRIPTION_EXPIRED', 'Đăng ký thông báo đã hết hạn. Hãy tắt rồi bật lại thông báo.')
+        }
+        throw error
+      }
+      return sendJson(response, 200, { sent: true })
     } catch (error) {
       return handleError(response, error)
     }

@@ -150,6 +150,21 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     persist({ ...settingsRef.current, leadMinutes })
   }, [persist])
 
+  const testNotification = useCallback(() => enqueue(async () => {
+    if (!settingsRef.current.enabled) throw new Error('Hãy bật thông báo trước khi kiểm tra.')
+    if (!supported || !server.available || Notification.permission !== 'granted') throw new Error('Thông báo chưa sẵn sàng trên thiết bị này.')
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    if (!subscription) throw new Error('Đăng ký push không còn hiệu lực. Hãy tắt rồi bật lại thông báo.')
+    if (mountedRef.current) setState({ phase: 'testing', count: 0, message: 'Đang gửi thông báo thử…' })
+    const response = await jsonRequest('/api/notifications/test', { subscription: subscription.toJSON() })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(payload?.message || 'Không thể gửi thông báo thử.')
+    if (mountedRef.current) setState({ phase: 'test-sent', count: 0, message: 'Đã gửi thông báo thử. Hãy kiểm tra Trung tâm thông báo.' })
+  }).catch((error) => {
+    if (mountedRef.current) setState({ phase: 'error', count: 0, message: error.message || 'Không thể gửi thông báo thử.' })
+  }), [enqueue, server.available, supported])
+
   let availability
   if (environment.needsInstallation) availability = 'Trên iPhone/iPad: chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở ứng dụng từ biểu tượng để bật Web Push.'
   else if (!supported) availability = 'Trình duyệt hoặc ngữ cảnh hiện tại không hỗ trợ Web Push.'
@@ -168,6 +183,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     availability,
     toggle,
     changeLead,
+    testNotification,
     shutdown: disable,
   }
 }

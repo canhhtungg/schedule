@@ -12,6 +12,7 @@ import {
   createNotificationConfigHandler,
   createNotificationDeliverHandler,
   createNotificationScheduleHandler,
+  createNotificationTestHandler,
 } from '../server/notificationHandlers.js'
 
 const PAYLOAD_KEY = Buffer.alloc(32, 7).toString('base64')
@@ -135,6 +136,33 @@ test('schedule rejects cross-origin and invalid lead time before publishing', as
   assert.equal(invalidLead.statusCode, 400)
   assert.equal(invalidLead.payload.code, 'INVALID_LEAD_MINUTES')
   assert.equal(calls, 0)
+})
+
+test('test endpoint sends an immediate fixed Web Push payload', async () => {
+  let sent
+  const now = Date.parse('2026-09-30T15:00:00Z')
+  const handler = createNotificationTestHandler({
+    env: ENV,
+    now: () => now,
+    sendPush: async (...args) => { sent = args },
+  })
+  const res = await invoke(handler, { body: { subscription: subscription() }, headers: browserHeaders() })
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(res.payload, { sent: true })
+  assert.equal(sent[0].endpoint, subscription().endpoint)
+  assert.equal(sent[1].title, 'KMA Planner')
+  assert.match(sent[1].body, /Thông báo thử/)
+  assert.equal(sent[1].tag, `notification-test-${now}`)
+})
+
+test('test endpoint reports an expired subscription', async () => {
+  const handler = createNotificationTestHandler({
+    env: ENV,
+    sendPush: async () => { throw Object.assign(new Error('gone'), { statusCode: 410 }) },
+  })
+  const res = await invoke(handler, { body: { subscription: subscription() }, headers: browserHeaders() })
+  assert.equal(res.statusCode, 410)
+  assert.equal(res.payload.code, 'SUBSCRIPTION_EXPIRED')
 })
 
 test('delivery verifies raw body before decrypting and sends a due push', async () => {
