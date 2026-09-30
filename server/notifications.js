@@ -98,9 +98,7 @@ export function nextDelivery(reminderAtMs, nowMs = Date.now()) {
 export function notificationForReminder(reminder, chainId) {
   const eventLine = reminder.room ? `${reminder.title} · ${reminder.room}` : reminder.title
   return {
-    // iOS substitutes the PWA name when the title is truly empty. A word
-    // joiner keeps the title technically non-empty without drawing a line.
-    title: '\u2060',
+    title: '@canhhtungg có thông báo',
     body: `${eventLine}\nLúc ${reminder.time}`,
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
@@ -111,7 +109,7 @@ export function notificationForReminder(reminder, chainId) {
 
 export function notificationForTest(nowMs = Date.now()) {
   return {
-    title: 'Thông báo thử',
+    title: '@canhhtungg có thông báo',
     body: 'Ngay bây giờ',
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
