@@ -96,16 +96,23 @@ function looksLikeLogin(html) {
 }
 
 function termRank(option) {
-  const text = `${option.value} ${option.label}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  // QLĐT term labels commonly contain an academic year (2025-2026) and a
-  // semester number (HK1/2/3). Rank by year first, then semester.
-  const years = [...text.matchAll(/(?:20\d{2})/g)].map((match) => Number(match[0]))
-  const semester = text.match(/(?:hk|hoc\s*ky|semester|term)\s*([123])/)?.[1]
-    || (/\b(he|summer)\b/.test(text) ? '3' : null)
-  // Some QLĐT labels name the academic year but call the summer period
-  // simply “Hè”. Keep those options in the latest-year group as well.
+  const normalize = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  // Prefer the visible label: option values are often opaque IDs and may
+  // contain unrelated years or numbers.
+  const label = normalize(option.label)
+  const value = normalize(option.value)
+  const years = [...label.matchAll(/20\d{2}/g)].map((match) => Number(match[0]))
+  const source = years.length ? label : `${label} ${value}`
+  if (!years.length) years.push(...[...value.matchAll(/20\d{2}/g)].map((match) => Number(match[0])))
   if (!years.length) return null
-  return [Math.max(...years), semester ? Number(semester) : 0]
+
+  // QLĐT uses both numeric semesters (Học kỳ 1/HK1) and Roman numerals
+  // (Học kỳ I), sometimes alongside a separate “đợt học” number.
+  const semesterText = source.match(/(?:hk|hoc\s*ky|semester)\s*(iii|ii|i|[123])\b/)?.[1]
+  const semesterMap = { i: 1, ii: 2, iii: 3, '1': 1, '2': 2, '3': 3 }
+  const semester = semesterMap[semesterText] || (/\b(he|summer)\b/.test(source) ? 3 : 0)
+  const period = Number(source.match(/(?:dot|period)\s*(\d+)/)?.[1] || 0)
+  return [Math.max(...years), semester, period]
 }
 
 function getTermOptions(html) {
@@ -118,14 +125,14 @@ function getTermOptions(html) {
     })).get().filter((option) => option.value)
 }
 
-function currentAcademicYearTerms(html) {
+export function currentAcademicYearTerms(html) {
   const options = getTermOptions(html)
   const ranked = options.map((option) => ({ ...option, rank: termRank(option) }))
     .filter((option) => option.rank)
   if (ranked.length) {
     const latestYear = Math.max(...ranked.map((option) => option.rank[0]))
     return ranked.filter((option) => option.rank[0] === latestYear)
-      .sort((a, b) => a.rank[1] - b.rank[1])
+      .sort((a, b) => a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2])
   }
   // When QLĐT uses opaque labels, use its most recently listed option.
   return options.slice(-1)
