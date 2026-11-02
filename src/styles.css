@@ -10,7 +10,7 @@ button { border: 0; cursor: pointer; }
 .brand { display: flex; align-items: center; gap: 11px; font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
 .brand-mark { display: grid; width: 38px; height: 38px; place-items: center; overflow: hidden; border-radius: 11px; }
 .brand-mark img { width: 100%; height: 100%; object-fit: cover; }
-.brand-light { color: #fff; }.brand-light .brand-mark { color: var(--ink); background: transparent; }
+.brand-light { color: #fff; }.brand-light .brand-mark { color: var(--ink); background: transparent; }.brand-light .brand-mark img { filter: brightness(0) invert(1); }
 .brand-dark { color: var(--ink); }.brand-dark .brand-mark { color: #fff; background: transparent; }
 
 /* Login */
