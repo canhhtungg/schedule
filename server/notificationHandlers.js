@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { Client, Receiver } from '@upstash/qstash'
 import webPush from 'web-push'
 import {
@@ -162,8 +162,13 @@ function validateEvents(value) {
   return value
 }
 
-function labelFor(chainId) {
+function legacyLabelFor(chainId) {
   return `notification-chain-${chainId}`
+}
+
+function subscriptionLabelFor(subscription) {
+  const fingerprint = createHash('sha256').update(subscription.endpoint).digest('hex')
+  return `notification-subscription-${fingerprint}`
 }
 
 function createQstashService(config, clientFactory = (options) => new Client(options)) {
@@ -209,12 +214,15 @@ function createServices(config, dependencies) {
   }
 }
 
-async function cancelPending(qstash, messageId, chainId) {
+async function cancelPending(qstash, messageId, chainId, subscription = null) {
   if (messageId && MESSAGE_ID_RE.test(messageId)) {
     try { await qstash.messages.cancel(messageId) } catch { /* Best effort: it may already be in flight or delivered. */ }
   }
   if (chainId && CHAIN_ID_RE.test(chainId)) {
-    try { await qstash.messages.cancel({ filter: { label: labelFor(chainId) } }) } catch { /* The exact ID cancellation above is still useful. */ }
+    try { await qstash.messages.cancel({ filter: { label: legacyLabelFor(chainId) } }) } catch { /* The exact ID cancellation above is still useful. */ }
+  }
+  if (subscription) {
+    try { await qstash.messages.cancel({ filter: { label: subscriptionLabelFor(subscription) } }) } catch { /* Best effort; the exact message ID cancellation above is still useful. */ }
   }
 }
 
@@ -231,7 +239,9 @@ async function publishEncrypted(qstash, config, payload, nowMs) {
       body,
       delay: delaySeconds,
       deduplicationId: `${payload.chainId}-${payload.index}-${payload.hop}`,
-      label: labelFor(payload.chainId),
+      // All pending reminders for one browser subscription share a label, so
+      // changing the lead time can remove every message in the previous chain.
+      label: subscriptionLabelFor(payload.subscription),
     })
     return result.messageId
   } catch (error) {
@@ -273,7 +283,7 @@ export function createNotificationScheduleHandler({ env = process.env, now = Dat
       if (previousChainId && !CHAIN_ID_RE.test(previousChainId)) throw new NotificationApiError(400, 'INVALID_CHAIN_ID', 'Chain ID không hợp lệ.')
 
       const services = createServices(config, dependencies)
-      await cancelPending(services.qstash, previousMessageId, previousChainId)
+      await cancelPending(services.qstash, previousMessageId, previousChainId, subscription)
       const reminders = planReminders(events, body.leadMinutes, now())
       if (!reminders.length) return sendJson(response, 200, { messageId: null, chainId: null, count: 0 })
       const chainId = random(16).toString('hex')
@@ -298,7 +308,8 @@ export function createNotificationCancelHandler({ env = process.env, ...dependen
       if (messageId && !MESSAGE_ID_RE.test(messageId)) throw new NotificationApiError(400, 'INVALID_MESSAGE_ID', 'Message ID không hợp lệ.')
       if (chainId && !CHAIN_ID_RE.test(chainId)) throw new NotificationApiError(400, 'INVALID_CHAIN_ID', 'Chain ID không hợp lệ.')
       const { qstash } = createServices(config, dependencies)
-      await cancelPending(qstash, messageId, chainId)
+      const subscription = body.subscription ? validateSubscription(body.subscription) : null
+      await cancelPending(qstash, messageId, chainId, subscription)
       return sendJson(response, 200, { cancelled: true })
     } catch (error) {
       return handleError(response, error)

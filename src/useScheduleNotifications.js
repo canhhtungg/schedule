@@ -129,7 +129,14 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     setState({ phase: 'idle', count: 0, message: 'Thông báo đang tắt.' })
     await enqueue(async () => {
       try {
-        if (previous.messageId || previous.chainId) await jsonRequest('/api/notifications/cancel', { messageId: previous.messageId, chainId: previous.chainId })
+        let subscription
+        if (supported) {
+          const registration = await navigator.serviceWorker.ready
+          subscription = (await registration.pushManager.getSubscription())?.toJSON()
+        }
+        if (previous.messageId || previous.chainId || subscription) {
+          await jsonRequest('/api/notifications/cancel', { messageId: previous.messageId, chainId: previous.chainId, subscription })
+        }
       } catch { /* Unsubscribe locally even when the server is temporarily unavailable. */ }
       if (supported) {
         try {

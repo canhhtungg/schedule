@@ -95,14 +95,17 @@ export function nextDelivery(reminderAtMs, nowMs = Date.now()) {
   }
 }
 
-export function notificationForReminder(reminder, chainId) {
+export function notificationForReminder(reminder) {
   const eventLine = reminder.room ? `${reminder.title} · ${reminder.room}` : reminder.title
   return {
     title: '@canhhtungg có thông báo',
     body: `${eventLine}\nLúc ${reminder.time}`,
     icon: '/system-logo-512.png',
     badge: '/system-logo-512.png',
-    tag: `schedule-${chainId}-${reminder.id}-${reminder.remindAt}`.slice(0, 240),
+    // Keep the browser notification key stable across reschedules. Multiple tabs
+    // can race while replacing a QStash chain; a chain-specific tag makes each
+    // copy appear as a separate notification for the same event.
+    tag: `schedule-${reminder.id}-${reminder.remindAt}`.slice(0, 240),
     data: { url: `/?date=${encodeURIComponent(reminder.date)}` },
   }
 }

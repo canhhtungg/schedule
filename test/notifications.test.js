@@ -122,9 +122,11 @@ test('schedule validates browser input, cancels prior chain, and publishes encry
   assert.equal(published[0].redact, undefined)
   assert.equal(published[0].timeout, undefined)
   assert.equal(published[0].url, `${ENV.APP_ORIGIN}/api/notifications/deliver`)
+  assert.match(published[0].label, /^notification-subscription-[a-f0-9]{64}$/)
   assert.equal(decryptPayload(published[0].body, PAYLOAD_KEY).subscription.endpoint, subscription().endpoint)
   assert.deepEqual(cancelled[0], 'msg_old')
   assert.deepEqual(cancelled[1], { filter: { label: `notification-chain-${'1'.repeat(32)}` } })
+  assert.deepEqual(cancelled[2], { filter: { label: published[0].label } })
 })
 
 test('schedule falls back from the legacy QStash URL to the token region', async () => {
