@@ -49,6 +49,8 @@ function requestOptions(options, timeoutMs) {
       accept: 'text/html,application/xhtml+xml,application/vnd.ms-excel,*/*;q=0.8',
       'accept-language': 'vi-VN,vi;q=0.9,en;q=0.5',
       'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+      'cache-control': 'no-cache, no-store',
+      pragma: 'no-cache',
       ...options.headers,
     },
   }
@@ -95,30 +97,75 @@ function looksLikeLogin(html) {
   return Boolean(error) || guest === 'khách' || $('input[name="txtPassword"]').length > 0 || $('input[name="txtUserName"]').length > 0
 }
 
-function getTermOptions(html) {
+function getDropdownOptions(html, fieldName) {
   const $ = cheerio.load(html)
-  const termSelect = $('select[name="dprTerm"]').first()
-  if (!termSelect.length) return []
-  return termSelect.find('option').map((_, option) => ({
+  const select = $(`select[name="${fieldName}"]`).first()
+  if (!select.length) return []
+  return select.find('option').map((_, option) => ({
       value: $(option).attr('value') || '',
       label: $(option).text().trim(),
     })).get().filter((option) => option.value)
 }
 
-export function getAllTerms(html) {
-  // Each option represents a separate QLĐT class period. Preserve the page's
-  // full list rather than guessing which academic year is current.
-  return getTermOptions(html)
+function getSemesterOptions(html) {
+  return getDropdownOptions(html, 'drpSemester')
 }
 
-export function configureExportForm(html, termValue) {
+function getTermOptions(html) {
+  return getDropdownOptions(html, 'drpTerm')
+}
+
+function semesterRank(option) {
+  const match = option.label.match(/^\s*(\d+)_(\d{4})_(\d{4})\s*$/)
+  if (!match) return null
+  return [Number(match[3]), Number(match[2]), Number(match[1])]
+}
+
+function chooseLatestSemester(options) {
+  if (!options.length) throw new QldtError('SEMESTER_DROPDOWN_NOT_FOUND', 'Không tìm thấy danh sách học kỳ trên QLĐT.')
+  const ranked = options.map((option) => ({ ...option, rank: semesterRank(option) }))
+  if (ranked.some((option) => !option.rank)) {
+    if (ranked.length === 1) return ranked[0]
+    throw new QldtError('SEMESTER_LABEL_UNRECOGNIZED', 'Không nhận diện được định dạng học kỳ do QLĐT cung cấp.')
+  }
+  return ranked.sort((a, b) => {
+    for (let index = 0; index < a.rank.length; index += 1) {
+      if (a.rank[index] !== b.rank[index]) return b.rank[index] - a.rank[index]
+    }
+    return 0
+  })[0]
+}
+
+function chooseLatestTerm(options) {
+  if (!options.length) throw new QldtError('TERM_DROPDOWN_NOT_FOUND', 'Không tìm thấy danh sách đợt học sau khi chọn học kỳ trên QLĐT.')
+  const ranked = options.map((option, index) => {
+    const match = `${option.label} ${option.value}`.match(/\d+/)
+    return { ...option, rank: match ? Number(match[0]) : index }
+  })
+  return ranked.sort((a, b) => b.rank - a.rank)[0]
+}
+
+function configureExportForm(html, semesterValue, termValue) {
   const fields = formFields(html)
-  const terms = getTermOptions(html)
-  const latestTerm = terms.find((option) => option.value === termValue) || getAllTerms(html).at(-1)
-  if (latestTerm) fields.set('dprTerm', latestTerm.value)
-  fields.set('dprType', 'A')
+  fields.set('drpSemester', semesterValue)
+  fields.set('drpTerm', termValue)
+  fields.set('drpType', 'A')
   fields.set('btnView', 'Xuất file Excel')
   return fields
+}
+
+function configurePostbackForm(html, target, field, value) {
+  const fields = formFields(html)
+  fields.set('__EVENTTARGET', target)
+  fields.set('__EVENTARGUMENT', '')
+  fields.set('__LASTFOCUS', '')
+  fields.set(field, value)
+  return fields
+}
+
+function selectedOptionValue(html, fieldName) {
+  const $ = cheerio.load(html)
+  return $(`select[name="${fieldName}"] option:selected`).attr('value')
 }
 
 function parseExport(result) {
@@ -143,7 +190,7 @@ export async function fetchQldtSchedule(username, password, options = {}) {
     maxBodyBytes: options.maxBodyBytes || DEFAULT_MAX_BODY_BYTES,
   }
   const jar = new CookieJar()
-  const fetchWithCookies = makeFetchCookie(globalThis.fetch, jar)
+  const fetchWithCookies = makeFetchCookie(options.fetchImpl || globalThis.fetch, jar)
 
   const loginPage = await request(fetchWithCookies, LOGIN_URL, { method: 'GET' }, limits)
   const loginForm = formFields(loginPage.html)
@@ -173,24 +220,46 @@ export async function fetchQldtSchedule(username, password, options = {}) {
     method: 'GET',
     headers: { referer: loginResult.url || LOGIN_URL },
   }, limits)
-  if (looksLikeLogin(timetablePage.html) || /Login\.aspx|ErrorPage_PageNotExist/i.test(timetablePage.url)) {
-    throw new QldtError('SESSION_REJECTED', 'Phiên đăng nhập QLĐT không hợp lệ hoặc đã bị chuyển hướng.', 401)
+  const ensureAuthenticatedPage = (page) => {
+    if (looksLikeLogin(page.html) || /Login\.aspx|ErrorPage_PageNotExist/i.test(page.url)) {
+      throw new QldtError('SESSION_REJECTED', 'Phiên đăng nhập QLĐT không hợp lệ hoặc đã bị chuyển hướng.', 401)
+    }
+  }
+  ensureAuthenticatedPage(timetablePage)
+
+  const semester = chooseLatestSemester(getSemesterOptions(timetablePage.html))
+  const postHeaders = {
+    'content-type': 'application/x-www-form-urlencoded',
+    origin: BASE_URL,
+    referer: TIMETABLE_URL,
+  }
+  const semesterPage = await request(fetchWithCookies, TIMETABLE_URL, {
+    method: 'POST', headers: postHeaders,
+    body: configurePostbackForm(timetablePage.html, 'drpSemester', 'drpSemester', semester.value),
+  }, limits)
+  ensureAuthenticatedPage(semesterPage)
+  if (selectedOptionValue(semesterPage.html, 'drpSemester') !== semester.value) {
+    throw new QldtError('SEMESTER_POSTBACK_FAILED', 'QLĐT không xác nhận học kỳ đã chọn.')
   }
 
-  const terms = getAllTerms(timetablePage.html)
-  if (!terms.length) terms.push({ value: undefined })
-  const eventsById = new Map()
-  for (const term of terms) {
-    const exported = await request(fetchWithCookies, TIMETABLE_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        origin: BASE_URL,
-        referer: TIMETABLE_URL,
-      },
-      body: configureExportForm(timetablePage.html, term.value),
-    }, limits)
-    for (const event of parseExport(exported)) eventsById.set(event.id, event)
+  const term = chooseLatestTerm(getTermOptions(semesterPage.html))
+  const termPage = await request(fetchWithCookies, TIMETABLE_URL, {
+    method: 'POST', headers: postHeaders,
+    body: configurePostbackForm(semesterPage.html, 'drpTerm', 'drpTerm', term.value),
+  }, limits)
+  ensureAuthenticatedPage(termPage)
+  if (selectedOptionValue(termPage.html, 'drpTerm') !== term.value) {
+    throw new QldtError('TERM_POSTBACK_FAILED', 'QLĐT không xác nhận đợt học đã chọn.')
   }
-  return [...eventsById.values()]
+
+  const logger = options.logger || console
+  logger.info('[qldt] Selected schedule period', JSON.stringify({ semester: semester.label, term: term.label }))
+  const exported = await request(fetchWithCookies, TIMETABLE_URL, {
+    method: 'POST', headers: postHeaders,
+    body: configureExportForm(termPage.html, semester.value, term.value),
+  }, limits)
+  ensureAuthenticatedPage(exported)
+  const events = parseExport(exported)
+  logger.info('[qldt] Schedule export succeeded', JSON.stringify({ semester: semester.label, term: term.label, eventCount: events.length }))
+  return events
 }
