@@ -95,9 +95,44 @@ function looksLikeLogin(html) {
   return Boolean(error) || guest === 'khách' || $('input[name="txtPassword"]').length > 0 || $('input[name="txtUserName"]').length > 0
 }
 
-function configureExportForm(html) {
+function termRank(option) {
+  const text = `${option.value} ${option.label}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  // QLĐT term labels commonly contain an academic year (2025-2026) and a
+  // semester number (HK1/2/3). Rank by year first, then semester.
+  const years = [...text.matchAll(/(?:20\d{2})/g)].map((match) => Number(match[0]))
+  const semester = text.match(/(?:hk|hoc\s*ky|semester|term)\s*([123])/)?.[1]
+  if (!years.length || !semester) return null
+  return [Math.max(...years), Number(semester)]
+}
+
+function getTermOptions(html) {
+  const $ = cheerio.load(html)
+  const termSelect = $('select[name="dprTerm"]').first()
+  if (!termSelect.length) return []
+  return termSelect.find('option').map((_, option) => ({
+      value: $(option).attr('value') || '',
+      label: $(option).text().trim(),
+    })).get().filter((option) => option.value)
+}
+
+function currentAcademicYearTerms(html) {
+  const options = getTermOptions(html)
+  const ranked = options.map((option) => ({ ...option, rank: termRank(option) }))
+    .filter((option) => option.rank)
+  if (ranked.length) {
+    const latestYear = Math.max(...ranked.map((option) => option.rank[0]))
+    return ranked.filter((option) => option.rank[0] === latestYear)
+      .sort((a, b) => a.rank[1] - b.rank[1])
+  }
+  // When QLĐT uses opaque labels, use its most recently listed option.
+  return options.slice(-1)
+}
+
+export function configureExportForm(html, termValue) {
   const fields = formFields(html)
-  fields.set('dprTerm', '1')
+  const terms = getTermOptions(html)
+  const latestTerm = terms.find((option) => option.value === termValue) || currentAcademicYearTerms(html).at(-1)
+  if (latestTerm) fields.set('dprTerm', latestTerm.value)
   fields.set('dprType', 'A')
   fields.set('btnView', 'Xuất file Excel')
   return fields
@@ -159,15 +194,20 @@ export async function fetchQldtSchedule(username, password, options = {}) {
     throw new QldtError('SESSION_REJECTED', 'Phiên đăng nhập QLĐT không hợp lệ hoặc đã bị chuyển hướng.', 401)
   }
 
-  const exportForm = configureExportForm(timetablePage.html)
-  const exported = await request(fetchWithCookies, TIMETABLE_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      origin: BASE_URL,
-      referer: TIMETABLE_URL,
-    },
-    body: exportForm,
-  }, limits)
-  return parseExport(exported)
+  const terms = currentAcademicYearTerms(timetablePage.html)
+  if (!terms.length) terms.push({ value: undefined })
+  const eventsById = new Map()
+  for (const term of terms) {
+    const exported = await request(fetchWithCookies, TIMETABLE_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: BASE_URL,
+        referer: TIMETABLE_URL,
+      },
+      body: configureExportForm(timetablePage.html, term.value),
+    }, limits)
+    for (const event of parseExport(exported)) eventsById.set(event.id, event)
+  }
+  return [...eventsById.values()]
 }
