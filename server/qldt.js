@@ -101,8 +101,11 @@ function termRank(option) {
   // semester number (HK1/2/3). Rank by year first, then semester.
   const years = [...text.matchAll(/(?:20\d{2})/g)].map((match) => Number(match[0]))
   const semester = text.match(/(?:hk|hoc\s*ky|semester|term)\s*([123])/)?.[1]
-  if (!years.length || !semester) return null
-  return [Math.max(...years), Number(semester)]
+    || (/\b(he|summer)\b/.test(text) ? '3' : null)
+  // Some QLĐT labels name the academic year but call the summer period
+  // simply “Hè”. Keep those options in the latest-year group as well.
+  if (!years.length) return null
+  return [Math.max(...years), semester ? Number(semester) : 0]
 }
 
 function getTermOptions(html) {
