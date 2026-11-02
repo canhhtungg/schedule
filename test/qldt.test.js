@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { currentAcademicYearTerms } from '../server/qldt.js'
+import { getAllTerms } from '../server/qldt.js'
 
-test('selects all terms in the newest academic year, including Roman-numeral semesters', () => {
+test('returns every QLĐT term, including periods from older academic years', () => {
   const html = `<form>
     <select name="dprTerm">
       <option value="old">Học kỳ II năm học 2025-2026 - Đợt 5</option>
@@ -11,10 +11,10 @@ test('selects all terms in the newest academic year, including Roman-numeral sem
     </select>
   </form>`
 
-  assert.deepEqual(currentAcademicYearTerms(html).map(({ value }) => value), ['new1', 'new2'])
+  assert.deepEqual(getAllTerms(html).map(({ value }) => value), ['old', 'new1', 'new2'])
 })
 
-test('recognizes a Roman-numeral semester and a Vietnamese summer term', () => {
+test('returns every listed term even when its label has no year', () => {
   const html = `<form>
     <select name="dprTerm">
       <option value="term1">2026-2027 - Học kỳ I</option>
@@ -22,5 +22,5 @@ test('recognizes a Roman-numeral semester and a Vietnamese summer term', () => {
     </select>
   </form>`
 
-  assert.deepEqual(currentAcademicYearTerms(html).map(({ value }) => value), ['term1', 'term2'])
+  assert.deepEqual(getAllTerms(html).map(({ value }) => value), ['term1', 'term2'])
 })

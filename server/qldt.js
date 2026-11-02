@@ -95,26 +95,6 @@ function looksLikeLogin(html) {
   return Boolean(error) || guest === 'khách' || $('input[name="txtPassword"]').length > 0 || $('input[name="txtUserName"]').length > 0
 }
 
-function termRank(option) {
-  const normalize = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  // Prefer the visible label: option values are often opaque IDs and may
-  // contain unrelated years or numbers.
-  const label = normalize(option.label)
-  const value = normalize(option.value)
-  const years = [...label.matchAll(/20\d{2}/g)].map((match) => Number(match[0]))
-  const source = years.length ? label : `${label} ${value}`
-  if (!years.length) years.push(...[...value.matchAll(/20\d{2}/g)].map((match) => Number(match[0])))
-  if (!years.length) return null
-
-  // QLĐT uses both numeric semesters (Học kỳ 1/HK1) and Roman numerals
-  // (Học kỳ I), sometimes alongside a separate “đợt học” number.
-  const semesterText = source.match(/(?:hk|hoc\s*ky|semester)\s*(iii|ii|i|[123])\b/)?.[1]
-  const semesterMap = { i: 1, ii: 2, iii: 3, '1': 1, '2': 2, '3': 3 }
-  const semester = semesterMap[semesterText] || (/\b(he|summer)\b/.test(source) ? 3 : 0)
-  const period = Number(source.match(/(?:dot|period)\s*(\d+)/)?.[1] || 0)
-  return [Math.max(...years), semester, period]
-}
-
 function getTermOptions(html) {
   const $ = cheerio.load(html)
   const termSelect = $('select[name="dprTerm"]').first()
@@ -125,23 +105,16 @@ function getTermOptions(html) {
     })).get().filter((option) => option.value)
 }
 
-export function currentAcademicYearTerms(html) {
-  const options = getTermOptions(html)
-  const ranked = options.map((option) => ({ ...option, rank: termRank(option) }))
-    .filter((option) => option.rank)
-  if (ranked.length) {
-    const latestYear = Math.max(...ranked.map((option) => option.rank[0]))
-    return ranked.filter((option) => option.rank[0] === latestYear)
-      .sort((a, b) => a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2])
-  }
-  // When QLĐT uses opaque labels, use its most recently listed option.
-  return options.slice(-1)
+export function getAllTerms(html) {
+  // Each option represents a separate QLĐT class period. Preserve the page's
+  // full list rather than guessing which academic year is current.
+  return getTermOptions(html)
 }
 
 export function configureExportForm(html, termValue) {
   const fields = formFields(html)
   const terms = getTermOptions(html)
-  const latestTerm = terms.find((option) => option.value === termValue) || currentAcademicYearTerms(html).at(-1)
+  const latestTerm = terms.find((option) => option.value === termValue) || getAllTerms(html).at(-1)
   if (latestTerm) fields.set('dprTerm', latestTerm.value)
   fields.set('dprType', 'A')
   fields.set('btnView', 'Xuất file Excel')
@@ -204,7 +177,7 @@ export async function fetchQldtSchedule(username, password, options = {}) {
     throw new QldtError('SESSION_REJECTED', 'Phiên đăng nhập QLĐT không hợp lệ hoặc đã bị chuyển hướng.', 401)
   }
 
-  const terms = currentAcademicYearTerms(timetablePage.html)
+  const terms = getAllTerms(timetablePage.html)
   if (!terms.length) terms.push({ value: undefined })
   const eventsById = new Map()
   for (const term of terms) {
