@@ -148,6 +148,9 @@ body { color: var(--text); background: var(--page); }
 }
 
 /* AI Schedule Assistant Tab */
+.ai-quick-button { display: grid; width: 40px; height: 40px; margin-left: auto; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--violet); background: var(--surface); box-shadow: 0 3px 10px var(--shadow); transition: transform .18s, background .18s, color .18s, border-color .18s; }
+.ai-quick-button:hover { color: #fff; border-color: var(--violet); background: var(--violet); transform: translateY(-1px); }
+
 .ai-panel { display: flex; max-width: 1040px; min-height: calc(100vh - 175px); margin: 0 auto; flex-direction: column; gap: 12px; }
 .ai-panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ai-status-pill { display: inline-flex; height: 32px; padding: 0 12px; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-soft); background: var(--surface); font-size: 11px; font-weight: 700; }
@@ -163,15 +166,10 @@ body { color: var(--text); background: var(--page); }
 .ai-config-warning code { padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, .08); font-size: 11px; }
 
 .ai-chat-viewport { display: flex; flex: 1; min-height: 420px; max-height: calc(100vh - 300px); padding: 20px; flex-direction: column; overflow-y: auto; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); box-shadow: 0 4px 18px var(--shadow); }
-.ai-welcome { max-width: 680px; margin: auto; padding: 18px 8px; text-align: center; }
-.ai-welcome-icon { display: grid; width: 56px; height: 56px; margin: 0 auto 14px; place-items: center; border-radius: 16px; color: var(--violet); background: var(--selected); }
+.ai-welcome { max-width: 520px; margin: auto; padding: 18px 8px; text-align: center; }
+.ai-welcome-icon { display: grid; width: 52px; height: 52px; margin: 0 auto 14px; place-items: center; border-radius: 50%; color: var(--violet); background: var(--selected); }
 .ai-welcome h2 { margin: 0 0 10px; font: 600 28px/1.15 'Newsreader', serif; color: var(--text); }
-.ai-welcome > p { margin: 0 auto 24px; color: var(--text-soft); font-size: 13px; line-height: 1.65; }
-.ai-prompt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
-.ai-prompt-chip { display: flex; padding: 13px 14px; align-items: flex-start; gap: 10px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: var(--surface-soft); font-size: 12px; font-weight: 600; line-height: 1.45; text-align: left; transition: border-color .18s, transform .18s; }
-.ai-prompt-chip:hover:not(:disabled) { border-color: var(--violet); background: var(--selected); transform: translateY(-1px); }
-.ai-prompt-chip:disabled { cursor: not-allowed; opacity: .55; }
-.ai-chip-icon { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border-radius: 7px; color: var(--violet); background: var(--surface); }
+.ai-welcome > p { margin: 0 auto; color: var(--text-soft); font-size: 13px; line-height: 1.65; }
 
 .ai-messages-list { display: flex; flex-direction: column; gap: 18px; }
 .ai-message { display: flex; align-items: flex-start; gap: 12px; }

@@ -13,13 +13,6 @@ const COLOR_OPTIONS = [
   { value: 'blue', label: 'Xanh dương' },
 ]
 
-const QUICK_PROMPTS = [
-  'Lên lịch tự học Tiếng Anh từ 19:30 đến 21:00 vào tối Thứ 2, Thứ 4, Thứ 6 trong 2 tuần tới.',
-  'Xếp giúp mình 4 buổi ôn thi An toàn thông tin vào các buổi chiều trống trong tuần này (14:00 - 16:00).',
-  'Tạo lịch tập thể dục buổi sáng 06:00 - 06:45 mỗi ngày từ ngày mai đến hết Chủ nhật tuần này.',
-  'Lên kế hoạch làm đồ án môn học vào sáng Thứ 7 và Chủ nhật trong 3 tuần tiếp theo (08:30 - 11:00).',
-]
-
 function formatDisplayDate(dateStr) {
   const parsed = parseDateKey(dateStr)
   if (!parsed) return dateStr
@@ -554,26 +547,12 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
         {messages.length === 0 ? (
           <div className="ai-welcome">
             <div className="ai-welcome-icon">
-              <Icon name="sparkles" size={28} />
+              <Icon name="sparkles" size={26} />
             </div>
             <h2>Trợ lý lập kế hoạch học tập AI</h2>
             <p>
-              Chỉ cần mô tả lịch trình bạn mong muốn trong thời gian tới. AI sẽ tự động đối chiếu với <strong>{events.length}</strong> sự kiện hiện có của bạn để né trùng giờ, lập danh sách chi tiết để bạn duyệt và thêm hàng loạt vào lịch chỉ với 1 cú nhấp.
+              Nhập lịch trình bạn mong muốn bên dưới. AI sẽ tự động phân tích, đối chiếu với lịch hiện có để né trùng giờ và tạo danh sách sự kiện để bạn chốt.
             </p>
-            <div className="ai-prompt-grid">
-              {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="ai-prompt-chip"
-                  disabled={sending || !serverStatus.available}
-                  onClick={() => sendPrompt(prompt)}
-                >
-                  <span className="ai-chip-icon"><Icon name="sparkles" size={14} /></span>
-                  <span>{prompt}</span>
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
           <div className="ai-messages-list">
@@ -640,7 +619,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Nhập lịch trình mong muốn (VD: Lên lịch ôn tập Mật mã học 19h30 - 21h tối T3, T5, T7 trong 2 tuần tới)…"
+          placeholder="Nhập lịch trình mong muốn của bạn…"
           disabled={sending}
         />
         <button
