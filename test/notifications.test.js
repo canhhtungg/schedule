@@ -63,7 +63,7 @@ test('Bangkok event time is converted with a fixed UTC+7 offset', () => {
   }
 })
 
-test('reminder planning skips invalid and past events and sorts upcoming reminders', () => {
+test('reminder planning skips invalid and past events, adds 15m follow-up for events with room, and sorts upcoming reminders', () => {
   const now = Date.parse('2026-09-30T00:00:00Z')
   const reminders = planReminders([
     { id: 'late', date: '2026-10-02', time: '08:00', title: 'Mật mã', room: 'P.401' },
@@ -71,8 +71,19 @@ test('reminder planning skips invalid and past events and sorts upcoming reminde
     { id: 'invalid', date: '2026-10-01', time: '', title: 'Thiếu giờ' },
     { id: 'early', date: '2026-10-01', time: '07:30 - 09:20', title: 'An toàn web' },
   ], 30, now)
-  assert.deepEqual(reminders.map((item) => item.id), ['early', 'late'])
+  // 'early' has no room -> 1 reminder (-30m)
+  // 'late' has room 'P.401' and leadMinutes=30 -> 2 reminders (-30m and -15m)
+  assert.deepEqual(reminders.map((item) => item.id), ['early', 'late', 'late'])
   assert.equal(reminders[0].remindAt, Date.parse('2026-10-01T00:00:00Z'))
+  assert.equal(reminders[1].remindAt, Date.parse('2026-10-02T00:30:00Z'))
+  assert.equal(reminders[2].remindAt, Date.parse('2026-10-02T00:45:00Z'))
+
+  // When leadMinutes is already 15, room events should only get 1 reminder (-15m), not duplicate
+  const singleLeadReminders = planReminders([
+    { id: 'late', date: '2026-10-02', time: '08:00', title: 'Mật mã', room: 'P.401' },
+  ], 15, now)
+  assert.equal(singleLeadReminders.length, 1)
+  assert.equal(singleLeadReminders[0].remindAt, Date.parse('2026-10-02T00:45:00Z'))
 })
 
 test('AES-256-GCM payload round-trips and rejects tampering', () => {
@@ -116,7 +127,7 @@ test('schedule validates browser input, cancels prior chain, and publishes encry
   })
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.messageId, 'msg_new')
-  assert.equal(res.payload.count, 1)
+  assert.equal(res.payload.count, 2)
   assert.equal(published.length, 1)
   assert.equal(published[0].delay, MAX_RELAY_SECONDS)
   assert.equal(published[0].redact, undefined)

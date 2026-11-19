@@ -30,6 +30,8 @@ function boundedText(value, maxLength) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
+export const CLASSROOM_FOLLOWUP_LEAD_MINUTES = 15
+
 export function planReminders(events, leadMinutes, nowMs = Date.now()) {
   if (!LEAD_MINUTES.includes(leadMinutes)) throw new TypeError('leadMinutes không hợp lệ.')
   if (!Array.isArray(events) || events.length > MAX_NOTIFICATION_EVENTS) throw new TypeError('Danh sách sự kiện không hợp lệ.')
@@ -38,16 +40,26 @@ export function planReminders(events, leadMinutes, nowMs = Date.now()) {
     const startAt = eventStartUtcMs(event)
     const title = boundedText(event?.title, 200)
     if (!startAt || !title) return []
-    const remindAt = startAt - leadMinutes * 60_000
-    if (remindAt <= nowMs) return []
-    return [{
-      id: boundedText(event.id, 120) || `${event.date}-${sourceIndex}`,
-      date: event.date,
-      title,
-      time: boundedText(event.time, 100),
-      room: boundedText(event.room, 100),
-      remindAt,
-    }]
+    const baseId = boundedText(event.id, 120) || `${event.date}-${sourceIndex}`
+    const time = boundedText(event.time, 100)
+    const room = boundedText(event.room, 100)
+
+    const leads = room && leadMinutes !== CLASSROOM_FOLLOWUP_LEAD_MINUTES
+      ? [leadMinutes, CLASSROOM_FOLLOWUP_LEAD_MINUTES]
+      : [leadMinutes]
+
+    return leads.flatMap((minutes) => {
+      const remindAt = startAt - minutes * 60_000
+      if (remindAt <= nowMs) return []
+      return [{
+        id: baseId,
+        date: event.date,
+        title,
+        time,
+        room,
+        remindAt,
+      }]
+    })
   }).sort((left, right) => left.remindAt - right.remindAt || left.id.localeCompare(right.id))
 }
 
