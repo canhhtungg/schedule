@@ -110,10 +110,54 @@ test('parseAiScheduleResponse supports action=delete and matches existing event 
   assert.equal(parsed.events[0].time, '08:00 – 09:00')
 })
 
-test('buildAiSystemPrompt includes reference date, calendar table with lunar dates, and existing events summary with IDs', () => {
+test('parseAiScheduleResponse filters out past dates and past time slots on the current day when action=add', () => {
+  const raw = JSON.stringify({
+    action: 'add',
+    reply: 'Lịch trong tháng 11.',
+    planTitle: 'Kế hoạch tháng 11',
+    events: [
+      {
+        date: '2026-11-10', // past date (< 2026-11-19) -> should be filtered out
+        startTime: '08:00',
+        endTime: '09:00',
+        title: 'Lịch ngày cũ đã qua',
+      },
+      {
+        date: '2026-11-19', // today, but 08:00-09:00 is before 15:00 -> should be filtered out
+        startTime: '08:00',
+        endTime: '09:00',
+        title: 'Lịch sáng nay đã qua',
+      },
+      {
+        date: '2026-11-19', // today, 19:30-21:00 is after 15:00 -> should be kept
+        startTime: '19:30',
+        endTime: '21:00',
+        title: 'Lịch tối nay sắp tới',
+      },
+      {
+        date: '2026-11-23', // future date -> should be kept
+        startTime: '08:00',
+        endTime: '09:00',
+        title: 'Lịch tuần sau',
+      },
+    ],
+  })
+
+  const parsed = parseAiScheduleResponse(raw, [], {
+    referenceDateKey: '2026-11-19',
+    referenceTimeKey: '15:00',
+  })
+
+  assert.equal(parsed.events.length, 2)
+  assert.equal(parsed.events[0].title, 'Lịch tối nay sắp tới')
+  assert.equal(parsed.events[1].title, 'Lịch tuần sau')
+})
+
+test('buildAiSystemPrompt includes reference date, current time, calendar table with lunar dates, and existing events summary with IDs', () => {
   const prompt = buildAiSystemPrompt('2026-11-19', [
     { id: 'ev-123', date: '2026-11-20', title: 'An toàn mạng', time: '13:00 – 15:30' },
-  ])
+  ], '15:05')
+  assert.match(prompt, /15:05 ngày 2026-11-19/)
   assert.match(prompt, /2026-11-19\(T5,Âm:11\/10\)/)
   assert.match(prompt, /\[id: ev-123\] 2026-11-20 \(Thứ 6\) \| 13:00 – 15:30 \| An toàn mạng/)
 })

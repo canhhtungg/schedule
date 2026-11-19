@@ -6,6 +6,7 @@ import {
   MAX_AI_MESSAGES,
   MAX_AI_MESSAGE_CHARS,
   bangkokDateKey,
+  bangkokTimeKey,
   buildAiSystemPrompt,
   parseAiScheduleResponse,
 } from './aiSchedule.js'
@@ -265,11 +266,15 @@ export function createAiScheduleHandler({
       const body = await readJson(request, MAX_AI_BODY_BYTES)
       const messages = validateMessages(body.messages)
       const existingEvents = validateExistingEvents(body.existingEvents)
+      const nowMs = now()
       const requestedRefDate = typeof body.referenceDate === 'string' && parseDateKey(body.referenceDate)
         ? body.referenceDate
-        : bangkokDateKey(now())
+        : bangkokDateKey(nowMs)
+      const requestedRefTime = typeof body.referenceTime === 'string' && /^([01]\d|2[0-3]):([0-5]\d)$/.test(body.referenceTime.trim())
+        ? body.referenceTime.trim()
+        : bangkokTimeKey(nowMs)
 
-      const systemPrompt = buildAiSystemPrompt(requestedRefDate, existingEvents)
+      const systemPrompt = buildAiSystemPrompt(requestedRefDate, existingEvents, requestedRefTime)
       const rawContent = await callGroq({
         apiKey: config.apiKey,
         model: config.model,
@@ -281,7 +286,10 @@ export function createAiScheduleHandler({
 
       let result
       try {
-        result = parseAiScheduleResponse(rawContent, existingEvents)
+        result = parseAiScheduleResponse(rawContent, existingEvents, {
+          referenceDateKey: requestedRefDate,
+          referenceTimeKey: requestedRefTime,
+        })
       } catch {
         throw new AiApiError(502, 'AI_PARSE_ERROR', 'Không thể đọc cấu trúc lịch từ phản hồi của AI. Vui lòng thử diễn đạt lại yêu cầu.')
       }

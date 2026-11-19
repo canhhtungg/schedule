@@ -28,6 +28,14 @@ export function bangkokDateKey(nowMs = Date.now()) {
   return `${year}-${month}-${day}`
 }
 
+export function bangkokTimeKey(nowMs = Date.now()) {
+  const bangkokMs = nowMs + 7 * 60 * 60 * 1000
+  const date = new Date(bangkokMs)
+  const hours = String(date.getUTCHours()).padStart(2, '0')
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 export function weekdayLabelForDateKey(value) {
   const parsed = parseDateKey(value)
   if (!parsed) return ''
@@ -50,12 +58,11 @@ export function buildUpcomingCalendarReference(referenceDateKey, daysCount = 60)
   return lines.join(' ')
 }
 
-export function buildYearLunarSpecialDaysReference(referenceDateKey) {
+export function buildYearLunarSpecialDaysReference(referenceDateKey, daysCount = 240) {
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
-  const startOfYear = new Date(baseDate.getFullYear(), 0, 1)
   const lines = []
-  for (let offset = 0; offset < 370; offset += 1) {
-    const current = addDays(startOfYear, offset)
+  for (let offset = 0; offset < daysCount; offset += 1) {
+    const current = addDays(baseDate, offset)
     const lunar = vietnameseLunarDate(current)
     const nextLunar = vietnameseLunarDate(addDays(current, 1))
     const isBeforeMung1 = nextLunar.day === 1
@@ -72,14 +79,14 @@ export function buildYearLunarSpecialDaysReference(referenceDateKey) {
 export function summarizeExistingEvents(existingEvents, referenceDateKey) {
   if (!Array.isArray(existingEvents) || existingEvents.length === 0) return 'Chưa có lịch nào.'
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
-  const minKey = dateKey(addDays(baseDate, -7))
+  const minKey = dateKey(baseDate)
   const maxKey = dateKey(addDays(baseDate, 120))
 
   const relevant = existingEvents
     .filter((item) => item && typeof item.date === 'string' && item.date >= minKey && item.date <= maxKey)
     .slice(0, 80)
 
-  if (!relevant.length) return 'Không có lịch nào trong khoảng thời gian này.'
+  if (!relevant.length) return 'Không có lịch nào từ hôm nay trở đi.'
 
   return relevant
     .map((item) => {
@@ -92,28 +99,30 @@ export function summarizeExistingEvents(existingEvents, referenceDateKey) {
     .join('\n')
 }
 
-export function buildAiSystemPrompt(referenceDateKey, existingEvents = []) {
+export function buildAiSystemPrompt(referenceDateKey, existingEvents = [], referenceTimeKey = '') {
   const todayKey = parseDateKey(referenceDateKey) ? referenceDateKey : bangkokDateKey()
+  const nowTimeKey = normalizeTimeToken(referenceTimeKey) || bangkokTimeKey()
   const todayWeekday = weekdayLabelForDateKey(todayKey)
   const calendarRef = buildUpcomingCalendarReference(todayKey, 60)
-  const yearSpecialLunarRef = buildYearLunarSpecialDaysReference(todayKey)
+  const yearSpecialLunarRef = buildYearLunarSpecialDaysReference(todayKey, 240)
   const busySummary = summarizeExistingEvents(existingEvents, todayKey)
 
   return `Bạn là Trợ lý Lập kế hoạch Lịch học thông minh của ứng dụng KMA Schedule.
 Nhiệm vụ: Phân tích yêu cầu thêm lịch mới, sửa kế hoạch, hoặc XÓA lịch đã có và trả về JSON.
 
 THỜI GIAN HIỆN TẠI:
-- Hôm nay: ${todayKey} (${todayWeekday}), UTC+7.
-- Lịch 60 ngày tới: ${calendarRef}
-- Các ngày Mùng 1 (Âm:01/MM), Rằm (Âm:15/MM) và ngày liền trước Mùng 1/Rằm trong năm: ${yearSpecialLunarRef}
+- Bây giờ là: ${nowTimeKey} ngày ${todayKey} (${todayWeekday}), múi giờ Việt Nam (UTC+7).
+- Lịch 60 ngày tới (từ hôm nay): ${calendarRef}
+- Các ngày Mùng 1 (Âm:01/MM), Rằm (Âm:15/MM) và ngày liền trước Mùng 1/Rằm sắp tới (từ hôm nay trở đi): ${yearSpecialLunarRef}
 
 DANH SÁCH LỊCH HIỆN CÓ (kèm [id: ...] để né trùng giờ hoặc chọn lịch cần xóa):
 ${busySummary}
 
 QUY TẮC BẮT BUỘC:
-1. NẾU THÊM LỊCH: Đặt "action": "add". BẮT BUỘC tạo các sự kiện cụ thể trong mảng "events". Ngày trước mùng 1 là ngày liền trước ngày có Âm:01/MM; ngày trước rằm là ngày có Âm:14/MM. Nếu không nêu giờ cụ thể, tự chọn giờ hợp lý (VD sáng 08:00-09:00, chiều 14:00-16:00, tối 19:30-21:30) và né giờ bận.
-2. NẾU XÓA LỊCH (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai"): Đặt "action": "delete". Tìm đúng các sự kiện khớp yêu cầu trong DANH SÁCH LỊCH HIỆN CÓ và đưa vào mảng "events" (giữ nguyên "id", "date", "title") để ứng dụng xóa khỏi bảng danh sách và hủy thông báo.
-3. "date" phải là ngày DƯƠNG LỊCH "YYYY-MM-DD".
+1. KHÔNG TẠO LỊCH TRONG QUÁ KHỨ: Khi thêm lịch mới ("action": "add", ví dụ người dùng bảo thêm lịch trong tuần/tháng), CHỈ tạo sự kiện bắt đầu từ thời điểm hiện tại (${nowTimeKey} ngày ${todayKey}) trở đi. TUYỆT ĐỐI BỎ QUA các ngày đã qua (< ${todayKey}) và các khung giờ trong ngày hôm nay (${todayKey}) đã trôi qua (< ${nowTimeKey}) để tiết kiệm bộ nhớ và token.
+2. NẾU THÊM LỊCH: Đặt "action": "add". BẮT BUỘC tạo các sự kiện cụ thể trong mảng "events". Ngày trước mùng 1 là ngày liền trước ngày có Âm:01/MM; ngày trước rằm là ngày có Âm:14/MM. Nếu không nêu giờ cụ thể, tự chọn giờ hợp lý (VD sáng 08:00-09:00, chiều 14:00-16:00, tối 19:30-21:30) và né giờ bận.
+3. NẾU XÓA LỊCH (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai"): Đặt "action": "delete". Tìm đúng các sự kiện khớp yêu cầu trong DANH SÁCH LỊCH HIỆN CÓ và đưa vào mảng "events" (giữ nguyên "id", "date", "title") để ứng dụng xóa khỏi bảng danh sách và hủy thông báo.
+4. "date" phải là ngày DƯƠNG LỊCH "YYYY-MM-DD".
 
 ĐỊNH DẠNG JSON BẮT BUỘC (KHÔNG BỌC MARKDOWN):
 {
@@ -140,6 +149,16 @@ function normalizeTimeToken(value) {
   const match = /^([01]?\d|2[0-3])[:h]([0-5]\d)$/.exec(String(value || '').trim())
   if (!match) return ''
   return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
+export function isPastProposedEvent(event, referenceDateKey, referenceTimeKey = '') {
+  if (!event || !event.date || !referenceDateKey) return false
+  if (event.date < referenceDateKey) return true
+  if (event.date === referenceDateKey && referenceTimeKey) {
+    const compareTime = event.endTime || event.startTime
+    if (compareTime && compareTime < referenceTimeKey) return true
+  }
+  return false
 }
 
 export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = [], action = 'add') {
@@ -229,7 +248,7 @@ export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = [],
   }
 }
 
-export function parseAiScheduleResponse(rawContent, existingEvents = []) {
+export function parseAiScheduleResponse(rawContent, existingEvents = [], { referenceDateKey = '', referenceTimeKey = '' } = {}) {
   if (typeof rawContent !== 'string' || !rawContent.trim()) {
     throw new Error('AI không trả về dữ liệu.')
   }
@@ -260,6 +279,7 @@ export function parseAiScheduleResponse(rawContent, existingEvents = []) {
   const events = rawEvents
     .map((item, index) => normalizeProposedEvent(item, index, existingEvents, action))
     .filter(Boolean)
+    .filter((item) => action === 'delete' || !isPastProposedEvent(item, referenceDateKey, referenceTimeKey))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '') || a.title.localeCompare(b.title))
 
   const reply = cleanText(parsed.reply, 3000) || (

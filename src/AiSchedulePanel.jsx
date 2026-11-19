@@ -441,13 +441,16 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
         return { role: msg.role, content: msg.content.slice(0, 1950) }
       })
 
+      const now = new Date()
+      const referenceTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
       const response = await fetch('/api/ai/schedule', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         cache: 'no-store',
         body: JSON.stringify({
           messages: apiMessages,
-          referenceDate: dateKey(new Date()),
+          referenceDate: dateKey(now),
+          referenceTime,
           existingEvents: events.slice(0, 300).map(({ id, date, title, time, room, code, color }) => ({ id, date, title, time, room, code, color })),
         }),
       })
