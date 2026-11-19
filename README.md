@@ -110,6 +110,15 @@ Test bao phủ parser HTML/workbook, import API, helper lịch âm, session/cài
 - `POST /api/notifications/cancel`: hủy QStash message ID và chain label trong giới hạn đầu vào.
 - `POST /api/notifications/deliver`: chỉ nhận QStash đã ký; relay tối đa 6 ngày, gửi Web Push đến hạn rồi lên lịch reminder tiếp theo.
 
+### AI Schedule API (Groq)
+
+- `GET /api/ai/config`: kiểm tra máy chủ đã cấu hình `GROQ_API_KEY` chưa, trả `{ available, model }` (không bao giờ trả API key xuống client).
+- `POST /api/ai/schedule`: nhận lịch sử hội thoại `messages`, ngày tham chiếu `referenceDate` và danh sách `existingEvents` để Groq AI phân tích mong muốn lịch trình, tự động né các khung giờ bận, trả về `reply`, `planTitle` và mảng `events` đã kiểm tra xung đột (`conflicts`).
+- Cấu hình biến môi trường:
+  - `GROQ_API_KEY`: API key từ Groq Console.
+  - `GROQ_MODEL` (tùy chọn, mặc định `llama-3.3-70b-versatile`).
+  - `GROQ_TIMEOUT_MS` (tùy chọn, mặc định `25000` ms).
+
 ### `POST /api/import/schedule`
 
 Nhập HTML:
@@ -138,9 +147,10 @@ Một lần tải QLĐT thực hiện nhiều request HTTP tuần tự. Upstream
 2. `server/parser.js` và `server/workbookParser.js` đọc HTML/workbook, chuẩn hóa và loại trùng sự kiện.
 3. `server/apiHandlers.js` cung cấp handler dùng chung cho Express và Vercel, gồm validation/headers/giới hạn body.
 4. `api/login/schedule.js` và `api/import/schedule.js` là Vercel Functions tương ứng.
-5. `server/notifications.js` tính reminder theo UTC+7 và mã hóa AES-GCM; `server/notificationHandlers.js` cung cấp shared handlers cho Express/Vercel.
-6. `src/useScheduleNotifications.js` quản lý permission/subscription/reschedule; `public/sw.js` nhận `push` và xử lý click an toàn về ngày liên quan.
-7. `src/calendarUtils.js` bọc `lunar-javascript` (MIT); `src/scheduleUtils.js` chứa CRUD thuần; `src/settingsUtils.js` quản lý theme/lịch âm.
+5. `server/aiSchedule.js` và `server/aiHandlers.js` xây dựng ngữ cảnh lịch dương + lịch bận hiện tại, gọi Groq API theo JSON mode và kiểm tra trùng giờ; `src/AiSchedulePanel.jsx` cung cấp tab **Thêm lịch với AI**.
+6. `server/notifications.js` tính reminder theo UTC+7 và mã hóa AES-GCM; `server/notificationHandlers.js` cung cấp shared handlers cho Express/Vercel.
+7. `src/useScheduleNotifications.js` quản lý permission/subscription/reschedule; `public/sw.js` nhận `push` và xử lý click an toàn về ngày liên quan.
+8. `src/calendarUtils.js` bọc `lunar-javascript` (MIT); `src/scheduleUtils.js` chứa CRUD thuần và lưu sự kiện hàng loạt; `src/settingsUtils.js` quản lý theme/lịch âm.
 
 ## Giới hạn trình duyệt và vận hành
 

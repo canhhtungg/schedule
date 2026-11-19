@@ -3,6 +3,7 @@ import path from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createHealthHandler, createImportScheduleHandler, createScheduleHandler } from './apiHandlers.js'
+import { createAiConfigHandler, createAiScheduleHandler } from './aiHandlers.js'
 import { createNotificationCancelHandler, createNotificationConfigHandler, createNotificationDeliverHandler, createNotificationScheduleHandler, createNotificationTestHandler } from './notificationHandlers.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -32,6 +33,8 @@ app.use(express.json({
 app.get('/api/health', createHealthHandler())
 app.post('/api/login/schedule', createScheduleHandler())
 app.post('/api/import/schedule', createImportScheduleHandler())
+app.get('/api/ai/config', createAiConfigHandler())
+app.post('/api/ai/schedule', createAiScheduleHandler())
 app.get('/api/notifications/config', createNotificationConfigHandler())
 app.post('/api/notifications/schedule', createNotificationScheduleHandler())
 app.post('/api/notifications/cancel', createNotificationCancelHandler())

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, sameDay, shiftMonth, startOfWeek, vietnameseLunarDate } from './calendarUtils.js'
-import { deleteEvent, saveEvent } from './scheduleUtils.js'
+import { deleteEvent, saveEvent, saveEventsBatch } from './scheduleUtils.js'
 import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
 import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
 import { NOTIFICATION_LEADS } from './notificationSettings.js'
 import { useScheduleNotifications } from './useScheduleNotifications.js'
 import { formatTimeRange, parseTimeRange } from './timeUtils.js'
+import { AiSchedulePanel } from './AiSchedulePanel.jsx'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -24,6 +25,9 @@ const Icon = ({ name, size = 20 }) => {
     arrow: <path d="M5 12h14M13 6l6 6-6 6"/>,
     book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></>,
     plus: <path d="M12 5v14M5 12h14"/>, edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></>, trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/></>,
+    sparkles: <><path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z"/><path d="m19 15 .9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z"/><path d="m6 16 .6 1.4L8 18l-1.4.6L6 20l-.6-1.4L4 18l1.4-.6L6 16Z"/></>,
+    send: <><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></>,
+    check: <path d="m5 12 5 5L20 7"/>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
   }
   return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
@@ -219,20 +223,29 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
     return next
   })
   const save = (draft, editingId) => { updateEvents((current) => saveEvent(current, draft, editingId)); const date = parseDateKey(draft.date); if (date) selectDate(date) }
+  const saveBatch = (drafts) => { updateEvents((current) => saveEventsBatch(current, drafts)) }
+  const openCalendarAtDate = (dateStr) => {
+    const parsed = parseDateKey(dateStr)
+    if (parsed) selectDate(parsed)
+    setPage('calendar')
+    setMenuOpen(false)
+  }
   const remove = (event) => { if (window.confirm(`Xóa “${event.title}”?`)) updateEvents((current) => deleteEvent(current, event.id)) }
   const weekEnd = addDays(startOfWeek(cursor), 6)
   const periodLabel = view === 'month' ? `${MONTH_NAMES[cursor.getMonth()]} / ${cursor.getFullYear()}` : `${pad(startOfWeek(cursor).getDate())}/${pad(startOfWeek(cursor).getMonth()+1)} – ${pad(weekEnd.getDate())}/${pad(weekEnd.getMonth()+1)}`
   const openPage = (nextPage) => { setPage(nextPage); setMenuOpen(false) }
   const logout = async () => { await notifications.shutdown(); onLogout() }
+  const topbarEyebrow = page === 'calendar' ? 'THỜI KHOÁ BIỂU' : (page === 'ai' ? 'TRỢ LÝ GROQ AI' : 'KMA PLANNER')
+  const topbarTitle = page === 'calendar' ? 'Lịch học của bạn' : (page === 'ai' ? 'Thêm lịch với AI' : 'Tùy chỉnh ứng dụng')
 
   return <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span className="brand-name">KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><button className="sidebar-collapse" type="button" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed((value) => !value)}><Icon name={sidebarCollapsed ? 'chevronRight' : 'chevronLeft'} size={16}/></button><nav><button aria-label="Lịch học" className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/><span className="nav-label">Lịch học</span></button><button aria-label="Cài đặt" className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/><span className="nav-label">Cài đặt</span></button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span className="profile-copy"><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
+    <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span className="brand-name">KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><button className="sidebar-collapse" type="button" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed((value) => !value)}><Icon name={sidebarCollapsed ? 'chevronRight' : 'chevronLeft'} size={16}/></button><nav><button aria-label="Lịch học" className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/><span className="nav-label">Lịch học</span></button><button aria-label="Thêm lịch với AI" className={`nav-item ${page === 'ai' ? 'active' : ''}`} aria-current={page === 'ai' ? 'page' : undefined} onClick={() => openPage('ai')}><Icon name="sparkles"/><span className="nav-label">Thêm lịch với AI</span></button><button aria-label="Cài đặt" className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/><span className="nav-label">Cài đặt</span></button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span className="profile-copy"><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
-    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{page === 'calendar' ? 'THỜI KHOÁ BIỂU' : 'KMA PLANNER'}</p><h1>{page === 'calendar' ? 'Lịch học của bạn' : 'Tùy chỉnh ứng dụng'}</h1></div></header>
+    <main className="workspace"><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{topbarEyebrow}</p><h1>{topbarTitle}</h1></div></header>
       {page === 'calendar' ? <>
         <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
         <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
-      </> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
+      </> : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>
