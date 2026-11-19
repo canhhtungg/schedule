@@ -86,3 +86,33 @@ export function saveEventsBatch(events, drafts) {
 export function deleteEvent(events, id) {
   return events.filter((event) => event.id !== id)
 }
+
+export function deleteEventsBatch(events, targets) {
+  if (!Array.isArray(events) || !Array.isArray(targets) || targets.length === 0) return Array.isArray(events) ? [...events] : []
+  const idSet = new Set()
+  const sigSet = new Set()
+
+  targets.forEach((target) => {
+    if (typeof target === 'string' && target.trim()) {
+      idSet.add(target.trim())
+    } else if (target && typeof target === 'object') {
+      if (typeof target.id === 'string' && target.id.trim()) idSet.add(target.id.trim())
+      if (typeof target.date === 'string' && typeof target.title === 'string') {
+        sigSet.add(`${clean(target.date)}|${clean(target.time)}|${clean(target.title).toLowerCase()}`)
+        sigSet.add(`${clean(target.date)}||${clean(target.title).toLowerCase()}`)
+      }
+    }
+  })
+
+  return events.filter((event) => {
+    if (!event) return false
+    if (idSet.has(event.id)) return false
+    const exactSig = `${clean(event.date)}|${clean(event.time)}|${clean(event.title).toLowerCase()}`
+    const titleDateSig = `${clean(event.date)}||${clean(event.title).toLowerCase()}`
+    if (sigSet.has(exactSig)) return false
+    if (sigSet.has(titleDateSig) && targets.some((t) => typeof t === 'object' && !clean(t.time) && clean(t.date) === clean(event.date) && clean(t.title).toLowerCase() === clean(event.title).toLowerCase())) {
+      return false
+    }
+    return true
+  })
+}

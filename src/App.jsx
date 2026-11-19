@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, sameDay, shiftMonth, startOfWeek, vietnameseLunarDate } from './calendarUtils.js'
-import { deleteEvent, saveEvent, saveEventsBatch } from './scheduleUtils.js'
+import { deleteEvent, deleteEventsBatch, saveEvent, saveEventsBatch } from './scheduleUtils.js'
 import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
 import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
 import { NOTIFICATION_LEADS } from './notificationSettings.js'
@@ -238,6 +238,9 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
       if (firstParsed) selectDate(firstParsed)
     }
   }
+  const deleteBatch = (targets) => {
+    updateEvents((current) => deleteEventsBatch(current, targets))
+  }
   const openCalendarAtDate = (dateStr) => {
     const parsed = parseDateKey(dateStr)
     if (parsed) selectDate(parsed)
@@ -381,7 +384,7 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
       </div>
     )}
     <main ref={workspaceRef} className="workspace" style={workspaceStyle}><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{topbarEyebrow}</p><h1>{topbarTitle}</h1></div>{page === 'calendar' && <button className="ai-quick-button" type="button" aria-label="Thêm lịch với AI" title="Thêm lịch với AI" onClick={() => openPage('ai')}><Icon name="sparkles" size={19}/></button>}</header>
-      {page === 'calendar' ? renderCalendarContent() : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
+      {page === 'calendar' ? renderCalendarContent() : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onDeleteEvents={deleteBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>

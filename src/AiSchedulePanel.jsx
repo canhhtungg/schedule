@@ -22,7 +22,7 @@ function formatDisplayDate(dateStr) {
   return `${weekday}, ${day}/${month}/${parsed.getFullYear()}`
 }
 
-function enrichProposedEvents(rawEvents, existingEvents) {
+function enrichProposedEvents(rawEvents, existingEvents, action = 'add') {
   return (rawEvents || []).map((item, idx) => {
     const time = item.startTime ? (item.endTime && item.endTime > item.startTime ? `${item.startTime} – ${item.endTime}` : item.startTime) : (item.time || '')
     const draft = {
@@ -30,6 +30,12 @@ function enrichProposedEvents(rawEvents, existingEvents) {
       id: item.id || `plan-item-${Date.now()}-${idx}`,
       selected: item.selected !== undefined ? item.selected : true,
       time,
+    }
+    if (action === 'delete') {
+      return {
+        ...draft,
+        conflicts: [],
+      }
     }
     const conflicts = findEventConflicts(existingEvents, draft)
     return {
@@ -41,6 +47,7 @@ function enrichProposedEvents(rawEvents, existingEvents) {
 
 function PlanCard({
   messageId,
+  action = 'add',
   planTitle,
   items,
   committedCount,
@@ -57,8 +64,9 @@ function PlanCard({
   const [editDraft, setEditDraft] = useState(null)
   const [editError, setEditError] = useState('')
 
+  const isDeleteAction = action === 'delete'
   const selectedItems = items.filter((item) => item.selected)
-  const conflictCount = selectedItems.filter((item) => item.conflicts?.length > 0).length
+  const conflictCount = isDeleteAction ? 0 : selectedItems.filter((item) => item.conflicts?.length > 0).length
   const allSelected = items.length > 0 && selectedItems.length === items.length
 
   const startEdit = (item) => {
@@ -107,12 +115,14 @@ function PlanCard({
   }
 
   return (
-    <div className={`ai-plan-card ${committedCount ? 'committed' : ''}`}>
+    <div className={`ai-plan-card ${committedCount ? 'committed' : ''} ${isDeleteAction ? 'delete-mode' : ''}`}>
       <div className="ai-plan-header">
         <div>
           <span className="ai-plan-badge">
-            <Icon name="sparkles" size={13} />
-            {committedCount ? 'ĐÃ CHỐT VÀO LỊCH' : 'KẾ HOẠCH ĐỀ XUẤT'}
+            <Icon name={isDeleteAction ? 'trash' : 'sparkles'} size={13} />
+            {committedCount
+              ? (isDeleteAction ? 'ĐÃ XÓA KHỎI LỊCH & HỦY THÔNG BÁO' : 'ĐÃ CHỐT VÀO LỊCH')
+              : (isDeleteAction ? 'DANH SÁCH LỊCH CẦN XÓA' : 'KẾ HOẠCH ĐỀ XUẤT')}
           </span>
           <h4>{planTitle || `Danh sách ${items.length} lịch trình`}</h4>
         </div>
@@ -136,177 +146,187 @@ function PlanCard({
         </div>
       )}
 
-      <div className="ai-plan-list">
-        {items.map((item) => {
-          const isEditing = editingId === item.id
-          const hasConflict = item.conflicts?.length > 0
+      {items.length > 0 && (
+        <div className="ai-plan-list">
+          {items.map((item) => {
+            const isEditing = editingId === item.id
+            const hasConflict = !isDeleteAction && item.conflicts?.length > 0
 
-          if (isEditing && editDraft) {
+            if (isEditing && editDraft) {
+              return (
+                <div className="ai-plan-item editing" key={item.id}>
+                  <div className="ai-inline-grid">
+                    <label>
+                      Ngày *
+                      <input
+                        type="date"
+                        value={editDraft.date}
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, date: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Tên sự kiện *
+                      <input
+                        type="text"
+                        value={editDraft.title}
+                        maxLength="200"
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Bắt đầu
+                      <input
+                        type="time"
+                        step="60"
+                        value={editDraft.startTime}
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, startTime: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Kết thúc
+                      <input
+                        type="time"
+                        step="60"
+                        value={editDraft.endTime}
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, endTime: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Nhãn / Mã
+                      <input
+                        type="text"
+                        value={editDraft.code}
+                        maxLength="50"
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, code: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Phòng / Địa điểm
+                      <input
+                        type="text"
+                        value={editDraft.room}
+                        maxLength="100"
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, room: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Ghi chú
+                      <input
+                        type="text"
+                        value={editDraft.teacher}
+                        maxLength="150"
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, teacher: e.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Màu thẻ
+                      <select
+                        value={editDraft.color}
+                        onChange={(e) => setEditDraft((prev) => ({ ...prev, color: e.target.value }))}
+                      >
+                        {COLOR_OPTIONS.map((opt) => (
+                          <option value={opt.value} key={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {editError && <p className="form-error">{editError}</p>}
+                  <div className="ai-inline-actions">
+                    <button type="button" className="ai-btn-secondary" onClick={() => setEditingId(null)}>Hủy</button>
+                    <button type="button" className="ai-btn-primary" onClick={() => saveInlineEdit(item.id)}>Lưu mục này</button>
+                  </div>
+                </div>
+              )
+            }
+
             return (
-              <div className="ai-plan-item editing" key={item.id}>
-                <div className="ai-inline-grid">
-                  <label>
-                    Ngày *
-                    <input
-                      type="date"
-                      value={editDraft.date}
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, date: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Tên sự kiện *
-                    <input
-                      type="text"
-                      value={editDraft.title}
-                      maxLength="200"
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Bắt đầu
-                    <input
-                      type="time"
-                      step="60"
-                      value={editDraft.startTime}
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, startTime: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Kết thúc
-                    <input
-                      type="time"
-                      step="60"
-                      value={editDraft.endTime}
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, endTime: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Nhãn / Mã
-                    <input
-                      type="text"
-                      value={editDraft.code}
-                      maxLength="50"
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, code: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Phòng / Địa điểm
-                    <input
-                      type="text"
-                      value={editDraft.room}
-                      maxLength="100"
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, room: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Ghi chú
-                    <input
-                      type="text"
-                      value={editDraft.teacher}
-                      maxLength="150"
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, teacher: e.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Màu thẻ
-                    <select
-                      value={editDraft.color}
-                      onChange={(e) => setEditDraft((prev) => ({ ...prev, color: e.target.value }))}
-                    >
-                      {COLOR_OPTIONS.map((opt) => (
-                        <option value={opt.value} key={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {editError && <p className="form-error">{editError}</p>}
-                <div className="ai-inline-actions">
-                  <button type="button" className="ai-btn-secondary" onClick={() => setEditingId(null)}>Hủy</button>
-                  <button type="button" className="ai-btn-primary" onClick={() => saveInlineEdit(item.id)}>Lưu mục này</button>
-                </div>
-              </div>
-            )
-          }
-
-          return (
-            <div className={`ai-plan-item ${!item.selected ? 'unselected' : ''} ${hasConflict ? 'has-conflict' : ''}`} key={item.id}>
-              {!committedCount && (
-                <input
-                  type="checkbox"
-                  className="ai-item-checkbox"
-                  aria-label={`Chọn ${item.title} ngày ${item.date}`}
-                  checked={item.selected}
-                  onChange={(e) => onToggleItem(messageId, item.id, e.target.checked)}
-                />
-              )}
-              <span className={`ai-item-color ${item.color || 'violet'}`} aria-hidden="true" />
-              <div className="ai-item-main">
-                <div className="ai-item-top">
-                  <span className="ai-item-date">{formatDisplayDate(item.date)}</span>
-                  {item.time && (
-                    <span className="ai-item-time">
-                      <Icon name="clock" size={13} />
-                      {item.time}
-                    </span>
+              <div className={`ai-plan-item ${!item.selected ? 'unselected' : ''} ${hasConflict ? 'has-conflict' : ''}`} key={item.id}>
+                {!committedCount && (
+                  <input
+                    type="checkbox"
+                    className="ai-item-checkbox"
+                    aria-label={`Chọn ${item.title} ngày ${item.date}`}
+                    checked={item.selected}
+                    onChange={(e) => onToggleItem(messageId, item.id, e.target.checked)}
+                  />
+                )}
+                <span className={`ai-item-color ${item.color || 'violet'}`} aria-hidden="true" />
+                <div className="ai-item-main">
+                  <div className="ai-item-top">
+                    <span className="ai-item-date">{formatDisplayDate(item.date)}</span>
+                    {item.time && (
+                      <span className="ai-item-time">
+                        <Icon name="clock" size={13} />
+                        {item.time}
+                      </span>
+                    )}
+                    {item.code && <span className={`ai-item-tag ${item.color || 'violet'}`}>{item.code}</span>}
+                  </div>
+                  <strong className="ai-item-title">{item.title}</strong>
+                  {(item.room || item.teacher) && (
+                    <div className="ai-item-meta">
+                      {item.room && <span><Icon name="pin" size={12} />{item.room}</span>}
+                      {item.teacher && <span><Icon name="user" size={12} />{item.teacher}</span>}
+                    </div>
                   )}
-                  {item.code && <span className={`ai-item-tag ${item.color || 'violet'}`}>{item.code}</span>}
+                  {hasConflict && (
+                    <p className="ai-item-conflict">
+                      Trùng khung giờ với: {item.conflicts.map((c) => `${c.title}${c.time ? ` (${c.time})` : ''}`).join(', ')}
+                    </p>
+                  )}
                 </div>
-                <strong className="ai-item-title">{item.title}</strong>
-                {(item.room || item.teacher) && (
-                  <div className="ai-item-meta">
-                    {item.room && <span><Icon name="pin" size={12} />{item.room}</span>}
-                    {item.teacher && <span><Icon name="user" size={12} />{item.teacher}</span>}
+                {!committedCount && (
+                  <div className="ai-item-actions">
+                    {!isDeleteAction && (
+                      <button
+                        type="button"
+                        aria-label={`Sửa ${item.title}`}
+                        title="Sửa nhanh"
+                        onClick={() => startEdit(item)}
+                      >
+                        <Icon name="edit" size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Bỏ ${item.title} khỏi danh sách`}
+                      title="Bỏ khỏi danh sách"
+                      onClick={() => onDeleteItem(messageId, item.id)}
+                    >
+                      <Icon name="trash" size={14} />
+                    </button>
                   </div>
                 )}
-                {hasConflict && (
-                  <p className="ai-item-conflict">
-                    Trùng khung giờ với: {item.conflicts.map((c) => `${c.title}${c.time ? ` (${c.time})` : ''}`).join(', ')}
-                  </p>
-                )}
               </div>
-              {!committedCount && (
-                <div className="ai-item-actions">
-                  <button
-                    type="button"
-                    aria-label={`Sửa ${item.title}`}
-                    title="Sửa nhanh"
-                    onClick={() => startEdit(item)}
-                  >
-                    <Icon name="edit" size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Xóa ${item.title} khỏi kế hoạch`}
-                    title="Bỏ khỏi danh sách"
-                    onClick={() => onDeleteItem(messageId, item.id)}
-                  >
-                    <Icon name="trash" size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="ai-plan-footer">
         {committedCount ? (
           <div className="ai-commit-success">
             <div className="ai-commit-summary">
-              <span>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</span>
-              <div className="ai-committed-dates">
-                {[...new Set(items.filter((i) => i.selected).map((i) => i.date))].sort().map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className="ai-date-jump-chip"
-                    onClick={() => onOpenCalendarDate(d)}
-                  >
-                    <Icon name="calendar" size={13} />
-                    {formatDisplayDate(d)}
-                  </button>
-                ))}
-              </div>
+              <span>
+                {isDeleteAction
+                  ? <>Đã xóa thành công <strong>{committedCount}</strong> sự kiện khỏi lịch học và cập nhật hủy lịch thông báo!</>
+                  : <>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</>}
+              </span>
+              {!isDeleteAction && (
+                <div className="ai-committed-dates">
+                  {[...new Set(items.filter((i) => i.selected).map((i) => i.date))].sort().map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className="ai-date-jump-chip"
+                      onClick={() => onOpenCalendarDate(d)}
+                    >
+                      <Icon name="calendar" size={13} />
+                      {formatDisplayDate(d)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {firstDate && (
               <button
@@ -322,16 +342,20 @@ function PlanCard({
         ) : (
           <>
             <span className="ai-plan-hint">
-              Bạn có thể sửa trực tiếp ở trên hoặc nhắn thêm bên dưới để AI điều chỉnh lại kế hoạch.
+              {isDeleteAction
+                ? 'Kiểm tra các lịch cần xóa ở trên rồi bấm xác nhận để xóa khỏi lịch và hủy thông báo.'
+                : 'Bạn có thể sửa trực tiếp ở trên hoặc nhắn thêm bên dưới để AI điều chỉnh lại kế hoạch.'}
             </span>
             <button
               type="button"
-              className="ai-commit-button"
+              className={`ai-commit-button ${isDeleteAction ? 'danger' : ''}`}
               disabled={selectedItems.length === 0}
-              onClick={() => onCommit(messageId, selectedItems)}
+              onClick={() => onCommit(messageId, selectedItems, action)}
             >
-              <Icon name="check" size={16} />
-              Chốt & Thêm {selectedItems.length} lịch vào thời khóa biểu
+              <Icon name={isDeleteAction ? 'trash' : 'check'} size={16} />
+              {isDeleteAction
+                ? `Xác nhận xóa ${selectedItems.length} lịch & hủy thông báo`
+                : `Chốt & Thêm ${selectedItems.length} lịch vào thời khóa biểu`}
             </button>
           </>
         )}
@@ -340,7 +364,7 @@ function PlanCard({
   )
 }
 
-export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Icon }) {
+export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpenCalendarDate, Icon }) {
   const [serverStatus, setServerStatus] = useState({ loading: true, available: true, model: '', message: '' })
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -375,7 +399,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
         if (msg.role !== 'assistant' || !msg.planItems?.length || msg.committedCount) return msg
         return {
           ...msg,
-          planItems: enrichProposedEvents(msg.planItems, events),
+          planItems: enrichProposedEvents(msg.planItems, events, msg.action),
         }
       })
     )
@@ -405,10 +429,11 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
       const apiMessages = nextHistory.slice(-10).map((msg) => {
         if (msg.role === 'assistant' && msg.planItems?.length) {
           const summaryJson = JSON.stringify({
+            action: msg.action || 'add',
             reply: msg.content,
             planTitle: msg.planTitle,
-            events: msg.planItems.map(({ date, startTime, endTime, title, code, room, teacher, color }) => ({
-              date, startTime, endTime, title, code, room, teacher, color,
+            events: msg.planItems.map(({ id, date, startTime, endTime, title, code, room, teacher, color }) => ({
+              id, date, startTime, endTime, title, code, room, teacher, color,
             })),
           })
           return { role: 'assistant', content: summaryJson.slice(0, 1950) }
@@ -423,7 +448,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
         body: JSON.stringify({
           messages: apiMessages,
           referenceDate: dateKey(new Date()),
-          existingEvents: events.slice(0, 300).map(({ id, date, title, time }) => ({ id, date, title, time })),
+          existingEvents: events.slice(0, 300).map(({ id, date, title, time, room, code, color }) => ({ id, date, title, time, room, code, color })),
         }),
       })
 
@@ -432,10 +457,12 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
         throw new Error(payload?.message || 'Không thể phân tích lịch học với AI lúc này.')
       }
 
-      const planItems = enrichProposedEvents(payload.events || [], events)
+      const action = payload.action === 'delete' ? 'delete' : 'add'
+      const planItems = enrichProposedEvents(payload.events || [], events, action)
       const assistantMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
+        action,
         content: payload.reply || 'Mình đã phân tích yêu cầu của bạn.',
         planTitle: payload.planTitle || '',
         planItems,
@@ -500,7 +527,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
         const updatedList = msg.planItems.map((item) => (item.id === itemId ? { ...item, ...updatedFields } : item))
         return {
           ...msg,
-          planItems: enrichProposedEvents(updatedList, events),
+          planItems: enrichProposedEvents(updatedList, events, msg.action),
         }
       })
     )
@@ -518,10 +545,27 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
     )
   }
 
-  const commitPlan = (messageId, selectedItems) => {
+  const commitPlan = (messageId, selectedItems, action = 'add') => {
     if (!selectedItems.length) return
-    onCommitEvents(selectedItems)
     const sortedDates = selectedItems.map((i) => i.date).sort()
+    if (action === 'delete') {
+      onDeleteEvents?.(selectedItems)
+      const removedIds = new Set(selectedItems.map((i) => i.id))
+      setMessages((current) =>
+        current.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                planItems: msg.planItems.filter((item) => !removedIds.has(item.id)),
+                committedCount: selectedItems.length,
+                firstCommittedDate: sortedDates[0],
+              }
+            : msg
+        )
+      )
+      return
+    }
+    onCommitEvents(selectedItems)
     setMessages((current) =>
       current.map((msg) =>
         msg.id === messageId
@@ -566,7 +610,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
             </div>
             <h2>Trợ lý lập kế hoạch học tập AI</h2>
             <p>
-              Nhập lịch trình bạn mong muốn bên dưới. AI sẽ tự động phân tích, đối chiếu với lịch hiện có để né trùng giờ và tạo danh sách sự kiện để bạn chốt.
+              Nhập lịch trình bạn muốn thêm hoặc xóa bên dưới. AI sẽ tự động phân tích, đối chiếu với lịch hiện có để tạo danh sách sự kiện hoặc chọn đúng các lịch cần xóa cho bạn.
             </p>
           </div>
         ) : (
@@ -580,9 +624,10 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
                   <div className="ai-message-bubble">
                     <p>{msg.content}</p>
                   </div>
-                  {msg.role === 'assistant' && msg.planItems?.length > 0 && (
+                  {msg.role === 'assistant' && (msg.planItems?.length > 0 || msg.committedCount > 0) && (
                     <PlanCard
                       messageId={msg.id}
+                      action={msg.action || 'add'}
                       planTitle={msg.planTitle}
                       items={msg.planItems}
                       committedCount={msg.committedCount}
@@ -634,7 +679,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onOpenCalendarDate, Ic
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Nhập lịch trình mong muốn của bạn…"
+          placeholder="Nhập lịch trình muốn thêm hoặc yêu cầu xóa lịch…"
           disabled={sending}
         />
         <button

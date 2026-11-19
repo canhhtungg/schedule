@@ -136,6 +136,9 @@ function validateExistingEvents(events) {
       date: item.date,
       title: typeof item.title === 'string' ? item.title.slice(0, 200) : '',
       time: typeof item.time === 'string' ? item.time.slice(0, 100) : '',
+      room: typeof item.room === 'string' ? item.room.slice(0, 100) : '',
+      code: typeof item.code === 'string' ? item.code.slice(0, 50) : '',
+      color: typeof item.color === 'string' ? item.color.slice(0, 20) : '',
     }))
 }
 
@@ -276,6 +279,7 @@ export function createAiScheduleHandler({
       }
 
       return sendJson(response, 200, {
+        action: result.action,
         reply: result.reply,
         planTitle: result.planTitle,
         events: result.events,

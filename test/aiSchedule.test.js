@@ -86,12 +86,36 @@ test('parseAiScheduleResponse normalizes events, strips invalid dates, and marks
   assert.equal(parsed.events[1].conflicts[0].title, 'Mật mã học')
 })
 
-test('buildAiSystemPrompt includes reference date, calendar table with lunar dates, and existing events summary', () => {
+test('parseAiScheduleResponse supports action=delete and matches existing event IDs', () => {
+  const existingEvents = [
+    { id: 'ev-incense-1', date: '2026-11-08', title: 'Mua đồ thắp hương', time: '08:00 – 09:00', color: 'amber' },
+  ]
+  const raw = JSON.stringify({
+    action: 'delete',
+    reply: 'Mình đã chọn lịch mua đồ thắp hương để xóa.',
+    planTitle: 'Xóa lịch mua đồ thắp hương',
+    events: [
+      {
+        id: 'ev-incense-1',
+        date: '2026-11-08',
+        title: 'Mua đồ thắp hương',
+      },
+    ],
+  })
+
+  const parsed = parseAiScheduleResponse(raw, existingEvents)
+  assert.equal(parsed.action, 'delete')
+  assert.equal(parsed.events.length, 1)
+  assert.equal(parsed.events[0].id, 'ev-incense-1')
+  assert.equal(parsed.events[0].time, '08:00 – 09:00')
+})
+
+test('buildAiSystemPrompt includes reference date, calendar table with lunar dates, and existing events summary with IDs', () => {
   const prompt = buildAiSystemPrompt('2026-11-19', [
-    { date: '2026-11-20', title: 'An toàn mạng', time: '13:00 – 15:30' },
+    { id: 'ev-123', date: '2026-11-20', title: 'An toàn mạng', time: '13:00 – 15:30' },
   ])
   assert.match(prompt, /2026-11-19 \(Thứ 5, Âm: 11\/10\)/)
-  assert.match(prompt, /2026-11-20 \(Thứ 6\) \| 13:00 – 15:30 \| An toàn mạng/)
+  assert.match(prompt, /\[id: ev-123\] 2026-11-20 \(Thứ 6\) \| 13:00 – 15:30 \| An toàn mạng/)
 })
 
 test('POST /api/ai/schedule validates input and returns structured plan from Groq', async (t) => {

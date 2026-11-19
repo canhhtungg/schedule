@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deleteEvent, findEventConflicts, saveEvent, saveEventsBatch } from '../src/scheduleUtils.js'
+import { deleteEvent, deleteEventsBatch, findEventConflicts, saveEvent, saveEventsBatch } from '../src/scheduleUtils.js'
 
 test('creates, edits, sorts, and deletes session events', () => {
   const existing = [{ id: 'one', date: '2026-09-30', title: 'Môn cũ', code: '', time: '', room: '', teacher: '', color: 'violet' }]
@@ -32,6 +32,20 @@ test('saveEventsBatch inserts multiple events, skips exact duplicates, and sorts
   assert.deepEqual(updated.map((e) => e.date), ['2026-10-01', '2026-10-02', '2026-10-03'])
   assert.equal(updated[0].color, 'amber')
   assert.equal(updated[2].color, 'cyan')
+})
+
+test('deleteEventsBatch removes events by id or by date+title+time signature', () => {
+  const existing = [
+    { id: 'e1', date: '2026-11-08', title: 'Mua đồ thắp hương', time: '08:00 – 09:00' },
+    { id: 'e2', date: '2026-11-23', title: 'Mua đồ thắp hương', time: '08:00 – 09:00' },
+    { id: 'e3', date: '2026-11-24', title: 'An toàn mạng', time: '13:00 – 15:30' },
+  ]
+  const remaining = deleteEventsBatch(existing, [
+    { id: 'e1', date: '2026-11-08', title: 'Mua đồ thắp hương' },
+    { id: 'ai-custom-id', date: '2026-11-23', title: 'Mua đồ thắp hương', time: '08:00 – 09:00' },
+  ])
+  assert.equal(remaining.length, 1)
+  assert.equal(remaining[0].id, 'e3')
 })
 
 test('findEventConflicts detects overlapping time ranges on the same date', () => {

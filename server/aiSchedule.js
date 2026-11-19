@@ -68,21 +68,23 @@ export function buildYearLunarSpecialDaysReference(referenceDateKey) {
 export function summarizeExistingEvents(existingEvents, referenceDateKey) {
   if (!Array.isArray(existingEvents) || existingEvents.length === 0) return 'Chưa có lịch nào trong khoảng thời gian này.'
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
-  const minKey = dateKey(addDays(baseDate, -3))
-  const maxKey = dateKey(addDays(baseDate, 120))
+  const minKey = dateKey(addDays(baseDate, -14))
+  const maxKey = dateKey(addDays(baseDate, 180))
 
   const relevant = existingEvents
     .filter((item) => item && typeof item.date === 'string' && item.date >= minKey && item.date <= maxKey)
-    .slice(0, 150)
+    .slice(0, 200)
 
-  if (!relevant.length) return 'Không có lịch bận nào trong 120 ngày tới.'
+  if (!relevant.length) return 'Không có lịch nào trong khoảng thời gian này.'
 
   return relevant
     .map((item) => {
+      const idStr = cleanText(item.id, 120)
       const weekday = weekdayLabelForDateKey(item.date)
       const timeStr = cleanText(item.time, 50) || 'Cả ngày'
       const titleStr = cleanText(item.title, 120)
-      return `- ${item.date} (${weekday}) | ${timeStr} | ${titleStr}`
+      const roomStr = cleanText(item.room, 80)
+      return `- [id: ${idStr}] ${item.date} (${weekday}) | ${timeStr} | ${titleStr}${roomStr ? ` | Phòng: ${roomStr}` : ''}`
     })
     .join('\n')
 }
@@ -95,7 +97,7 @@ export function buildAiSystemPrompt(referenceDateKey, existingEvents = []) {
   const busySummary = summarizeExistingEvents(existingEvents, todayKey)
 
   return `Bạn là Trợ lý Lập kế hoạch Lịch học thông minh của ứng dụng KMA Schedule.
-Nhiệm vụ của bạn là phân tích mong muốn lịch trình của người dùng (lịch tự học, ôn thi, học nhóm, thể thao, công việc cá nhân, lịch nhắc theo dương lịch hoặc âm lịch...) và tạo danh sách các sự kiện lịch cụ thể trong mảng "events".
+Nhiệm vụ của bạn là phân tích mong muốn lịch trình của người dùng (thêm lịch mới, chỉnh sửa kế hoạch, hoặc XÓA các lịch đã có trong thời khóa biểu) và trả về danh sách sự kiện cụ thể trong mảng "events".
 
 THÔNG TIN THỜI GIAN HIỆN TẠI:
 - Hôm nay là: ${todayKey} (${todayWeekday}), múi giờ Việt Nam (UTC+7).
@@ -104,23 +106,29 @@ ${calendarRef}
 - Bảng tra cứu nhanh các ngày Mùng 1 (Âm: 01/MM), Ngày Rằm (Âm: 15/MM) và ngày liền trước mùng 1/rằm (Âm: 14/MM, 29/MM, 30/MM) trong cả năm:
 ${yearSpecialLunarRef}
 
-LỊCH HIỆN CÓ CỦA NGƯỜI DÙNG (để tránh xếp trùng giờ):
+DANH SÁCH LỊCH HIỆN CÓ CỦA NGƯỜI DÙNG (kèm [id: ...] để đối chiếu trùng giờ hoặc chọn lịch cần xóa):
 ${busySummary}
 
 QUY TẮC LẬP KẾ HOẠCH BẮT BUỘC:
-1. BẤT CỨ KHI NÀO người dùng yêu cầu thêm lịch, nhắc lịch, lên kế hoạch (dù theo ngày dương hay ngày âm, dù chỉ nêu "buổi sáng/chiều/tối"), bạn BẮT BUỘC phải sinh ra các phần tử sự kiện cụ thể trong mảng "events" (KHÔNG ĐƯỢC để "events": [] rồi chỉ liệt kê ngày trong "reply").
-2. Nếu người dùng nói "tháng 11 và tháng 12" kèm "mùng 1 hoặc rằm (âm lịch)", hãy kiểm tra xem họ đang nói tháng 11, 12 dương lịch hay tháng 11, 12 âm lịch (Âm: xx/11, Âm: xx/12) và liệt kê đầy đủ các ngày thỏa mãn vào mảng "events". Lưu ý: "ngày trước ngày mùng 1" là ngày dương lịch liền trước ngày có ` + '`Âm: 01/MM`' + ` (tức ngày 29 hoặc 30 âm lịch cuối tháng trước), và "ngày trước ngày rằm" là ngày dương lịch liền trước ngày có ` + '`Âm: 15/MM`' + ` (tức ngày ` + '`Âm: 14/MM`' + `).
-3. Trường "date" của mỗi sự kiện trong mảng "events" BẮT BUỘC phải là ngày DƯƠNG LỊCH định dạng "YYYY-MM-DD" lấy từ bảng tra cứu ở trên.
-4. Nếu người dùng nói buổi sáng/chiều/tối mà không nêu giờ cụ thể, hãy tự chọn khung giờ hợp lý (VD: sáng "08:00" đến "09:00", chiều "14:00" đến "16:00", tối "19:30" đến "21:30") và ưu tiên NÉ các khung giờ đã bận trong LỊCH HIỆN CÓ.
-5. Nếu người dùng yêu cầu chỉnh sửa kế hoạch vừa đề xuất ở tin nhắn trước, hãy trả về mảng "events" MỚI đã được cập nhật đầy đủ.
-6. Chỉ để "events" là mảng rỗng [] khi người dùng chào hỏi xã giao mà hoàn toàn không yêu cầu tạo bất kỳ lịch hay lời nhắc nào.
+1. NẾU NGƯỜI DÙNG YÊU CẦU THÊM LỊCH / LÊN KẾ HOẠCH:
+   - Đặt "action": "add".
+   - BẮT BUỘC sinh ra các phần tử sự kiện cụ thể trong mảng "events" (KHÔNG ĐƯỢC để "events": [] rồi chỉ liệt kê ngày trong "reply").
+   - Nếu người dùng nói "tháng 11 và tháng 12" kèm "mùng 1 hoặc rằm (âm lịch)", hãy liệt kê đầy đủ các ngày thỏa mãn vào mảng "events". Lưu ý: "ngày trước ngày mùng 1" là ngày dương lịch liền trước ngày có ` + '`Âm: 01/MM`' + ` (tức ngày 29 hoặc 30 âm lịch cuối tháng trước), và "ngày trước ngày rằm" là ngày dương lịch liền trước ngày có ` + '`Âm: 15/MM`' + ` (tức ngày ` + '`Âm: 14/MM`' + `).
+   - Nếu người dùng nói buổi sáng/chiều/tối mà không nêu giờ cụ thể, hãy tự chọn khung giờ hợp lý (VD: sáng "08:00" đến "09:00", chiều "14:00" đến "16:00", tối "19:30" đến "21:30") và ưu tiên NÉ các khung giờ đã bận trong DANH SÁCH LỊCH HIỆN CÓ.
+2. NẾU NGƯỜI DÙNG YÊU CẦU XÓA / HỦY / GỠ BỎ CÁC LỊCH ĐÃ CÓ TRONG THỜI KHÓA BIỂU (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai", "xóa hết lịch tự học tiếng Anh"):
+   - Đặt "action": "delete".
+   - Tìm đúng các sự kiện khớp với yêu cầu của người dùng trong DANH SÁCH LỊCH HIỆN CÓ ở trên và đưa chúng vào mảng "events" (giữ nguyên "id", "date", "title", và khung giờ của sự kiện đó) để ứng dụng xóa khỏi bảng danh sách lịch và hủy lịch thông báo (notification).
+3. Trường "date" của mỗi sự kiện trong mảng "events" BẮT BUỘC phải là ngày DƯƠNG LỊCH định dạng "YYYY-MM-DD".
+4. Chỉ để "events" là mảng rỗng [] khi người dùng chào hỏi xã giao mà hoàn toàn không yêu cầu thêm hoặc xóa lịch nào.
 
 ĐỊNH DẠNG ĐẦU RA BẮT BUỘC (JSON OBJECT HỢP LỆ, KHÔNG BỌC MARKDOWN):
 {
-  "reply": "Lời giải thích ngắn gọn về các ngày đã lên lịch...",
-  "planTitle": "Tiêu đề ngắn gọn của kế hoạch",
+  "action": "add | delete",
+  "reply": "Lời giải thích ngắn gọn về các lịch sắp thêm hoặc sắp xóa...",
+  "planTitle": "Tiêu đề ngắn gọn (VD: Kế hoạch nhắc mua đồ thắp hương / Danh sách lịch cần xóa)",
   "events": [
     {
+      "id": "Giữ nguyên id từ [id: ...] nếu action là delete (hoặc để chuỗi rỗng nếu action là add)",
       "date": "YYYY-MM-DD",
       "startTime": "HH:mm",
       "endTime": "HH:mm",
@@ -140,8 +148,47 @@ function normalizeTimeToken(value) {
   return `${match[1].padStart(2, '0')}:${match[2]}`
 }
 
-export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = []) {
+export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = [], action = 'add') {
   if (!rawEvent || typeof rawEvent !== 'object') return null
+  const requestedId = cleanText(rawEvent.id, 120)
+
+  if (action === 'delete') {
+    const matchedById = requestedId
+      ? existingEvents.find((item) => item && item.id === requestedId)
+      : null
+    const rawDate = cleanText(rawEvent.date, 10)
+    const rawTitle = cleanText(rawEvent.title, 200).toLowerCase()
+    const matchedByFields = !matchedById && rawDate && rawTitle
+      ? existingEvents.find((item) => item && item.date === rawDate && cleanText(item.title, 200).toLowerCase() === rawTitle)
+      : null
+    const matched = matchedById || matchedByFields
+
+    const date = matched?.date || rawDate
+    const title = matched?.title || cleanText(rawEvent.title, 200)
+    if (!parseDateKey(date) || !title) return null
+
+    const parsedRange = parseTimeRange(matched?.time || rawEvent.time)
+    const startTime = normalizeTimeToken(rawEvent.startTime) || parsedRange.startTime
+    const endTime = normalizeTimeToken(rawEvent.endTime) || parsedRange.endTime
+    const time = matched?.time || (startTime ? (endTime && endTime > startTime ? `${startTime} – ${endTime}` : startTime) : '')
+
+    return {
+      id: matched?.id || requestedId || `ai-delete-${date}-${index}`,
+      targetEventId: matched?.id || requestedId || '',
+      date,
+      weekday: weekdayLabelForDateKey(date),
+      title,
+      code: cleanText(matched?.code || rawEvent.code, 50),
+      startTime,
+      endTime,
+      time,
+      room: cleanText(matched?.room || rawEvent.room, 100),
+      teacher: cleanText(matched?.teacher || rawEvent.teacher, 150),
+      color: COLORS.includes(matched?.color) ? matched.color : 'rose',
+      conflicts: [],
+    }
+  }
+
   const date = cleanText(rawEvent.date, 10)
   const title = cleanText(rawEvent.title, 200)
   if (!parseDateKey(date) || !title) return null
@@ -214,20 +261,28 @@ export function parseAiScheduleResponse(rawContent, existingEvents = []) {
     throw new Error('Phản hồi từ AI phải là một JSON object.')
   }
 
+  const action = cleanText(parsed.action, 20).toLowerCase() === 'delete' ? 'delete' : 'add'
   const rawEvents = Array.isArray(parsed.events) ? parsed.events.slice(0, MAX_AI_PROPOSED_EVENTS) : []
   const events = rawEvents
-    .map((item, index) => normalizeProposedEvent(item, index, existingEvents))
+    .map((item, index) => normalizeProposedEvent(item, index, existingEvents, action))
     .filter(Boolean)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '') || a.title.localeCompare(b.title))
 
   const reply = cleanText(parsed.reply, 3000) || (
     events.length
-      ? `Mình đã lập kế hoạch gồm ${events.length} sự kiện theo yêu cầu của bạn. Bạn hãy kiểm tra và bấm chốt để thêm vào lịch nhé!`
-      : 'Mình chưa tìm thấy thông tin ngày giờ cụ thể để tạo lịch. Bạn có thể mô tả rõ hơn thời gian và nội dung lịch mong muốn không?'
+      ? (action === 'delete'
+        ? `Mình đã tìm thấy ${events.length} sự kiện cần xóa theo yêu cầu của bạn. Hãy kiểm tra và bấm xác nhận xóa nhé!`
+        : `Mình đã lập kế hoạch gồm ${events.length} sự kiện theo yêu cầu của bạn. Bạn hãy kiểm tra và bấm chốt để thêm vào lịch nhé!`)
+      : 'Mình chưa tìm thấy thông tin ngày giờ cụ thể. Bạn có thể mô tả rõ hơn thời gian và nội dung lịch mong muốn không?'
   )
-  const planTitle = cleanText(parsed.planTitle, 160) || (events.length ? `Kế hoạch đề xuất (${events.length} lịch)` : '')
+  const planTitle = cleanText(parsed.planTitle, 160) || (
+    events.length
+      ? (action === 'delete' ? `Danh sách lịch cần xóa (${events.length} lịch)` : `Kế hoạch đề xuất (${events.length} lịch)`)
+      : ''
+  )
 
   return {
+    action,
     reply,
     planTitle,
     events,
