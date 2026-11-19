@@ -1,5 +1,6 @@
 import {
   DEFAULT_GROQ_MODEL,
+  FALLBACK_GROQ_MODELS,
   GROQ_API_URL,
   MAX_AI_CONTEXT_EVENTS,
   MAX_AI_MESSAGES,
@@ -138,47 +139,72 @@ function validateExistingEvents(events) {
     }))
 }
 
+function isModelUnavailableError(status, errorPayload) {
+  if (status === 404) return true
+  const code = String(errorPayload?.code || '').toLowerCase()
+  const message = String(errorPayload?.message || '').toLowerCase()
+  return (
+    code === 'model_not_found'
+    || code === 'model_decommissioned'
+    || message.includes('does not exist or you do not have access')
+    || message.includes('has been decommissioned')
+    || message.includes('model not found')
+  )
+}
+
 async function defaultCallGroq({ apiKey, model, timeoutMs, systemPrompt, messages, fetchImpl = globalThis.fetch }) {
+  const candidateModels = [...new Set([model, ...FALLBACK_GROQ_MODELS].filter(Boolean))]
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetchImpl(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_completion_tokens: 4096,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ],
-      }),
-      signal: controller.signal,
-    })
+    let lastUpstreamMsg = ''
 
-    const data = await response.json().catch(() => null)
-    if (!response.ok) {
-      const upstreamMsg = data?.error?.message || ''
-      if (response.status === 401 || response.status === 403) {
-        throw new AiApiError(502, 'GROQ_AUTH_FAILED', 'GROQ_API_KEY trên máy chủ không hợp lệ hoặc đã hết hạn.')
+    for (let index = 0; index < candidateModels.length; index += 1) {
+      const candidateModel = candidateModels[index]
+      const response = await fetchImpl(GROQ_API_URL, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: candidateModel,
+          temperature: 0.2,
+          max_completion_tokens: 8192,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+        }),
+        signal: controller.signal,
+      })
+
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        const upstreamMsg = data?.error?.message || ''
+        lastUpstreamMsg = upstreamMsg
+        if (response.status === 401 || response.status === 403) {
+          throw new AiApiError(502, 'GROQ_AUTH_FAILED', 'GROQ_API_KEY trên máy chủ không hợp lệ hoặc đã hết hạn.')
+        }
+        if (response.status === 429) {
+          throw new AiApiError(429, 'GROQ_RATE_LIMIT', 'Groq AI đang quá tải hoặc đạt giới hạn request. Vui lòng thử lại sau ít giây.')
+        }
+        if (isModelUnavailableError(response.status, data?.error) && index < candidateModels.length - 1) {
+          continue
+        }
+        throw new AiApiError(502, 'GROQ_UPSTREAM_ERROR', upstreamMsg ? `Groq AI trả lỗi: ${upstreamMsg}` : 'Không thể xử lý yêu cầu với Groq AI lúc này.')
       }
-      if (response.status === 429) {
-        throw new AiApiError(429, 'GROQ_RATE_LIMIT', 'Groq AI đang quá tải hoặc đạt giới hạn request. Vui lòng thử lại sau ít giây.')
+
+      const content = data?.choices?.[0]?.message?.content
+      if (typeof content !== 'string' || !content.trim()) {
+        throw new AiApiError(502, 'GROQ_EMPTY_RESPONSE', 'Groq AI không trả về nội dung kế hoạch.')
       }
-      throw new AiApiError(502, 'GROQ_UPSTREAM_ERROR', upstreamMsg ? `Groq AI trả lỗi: ${upstreamMsg}` : 'Không thể xử lý yêu cầu với Groq AI lúc này.')
+      return content
     }
 
-    const content = data?.choices?.[0]?.message?.content
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new AiApiError(502, 'GROQ_EMPTY_RESPONSE', 'Groq AI không trả về nội dung kế hoạch.')
-    }
-    return content
+    throw new AiApiError(502, 'GROQ_UPSTREAM_ERROR', lastUpstreamMsg ? `Groq AI trả lỗi: ${lastUpstreamMsg}` : 'Không thể xử lý yêu cầu với Groq AI lúc này.')
   } catch (error) {
     if (error instanceof AiApiError) throw error
     if (error?.name === 'AbortError') {

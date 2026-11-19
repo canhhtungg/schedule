@@ -116,7 +116,7 @@ Test bao phủ parser HTML/workbook, import API, helper lịch âm, session/cài
 - `POST /api/ai/schedule`: nhận lịch sử hội thoại `messages`, ngày tham chiếu `referenceDate` và danh sách `existingEvents` để Groq AI phân tích mong muốn lịch trình, tự động né các khung giờ bận, trả về `reply`, `planTitle` và mảng `events` đã kiểm tra xung đột (`conflicts`).
 - Cấu hình biến môi trường:
   - `GROQ_API_KEY`: API key từ Groq Console.
-  - `GROQ_MODEL` (tùy chọn, mặc định `llama-3.3-70b-versatile`).
+  - `GROQ_MODEL` (tùy chọn, mặc định `openai/gpt-oss-120b`, có tự động fallback khi model cũ ngừng hoạt động).
   - `GROQ_TIMEOUT_MS` (tùy chọn, mặc định `25000` ms).
 
 ### `POST /api/import/schedule`

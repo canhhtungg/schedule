@@ -1,8 +1,13 @@
-import { addDays, dateKey, parseDateKey } from '../src/calendarUtils.js'
+import { addDays, dateKey, pad, parseDateKey, vietnameseLunarDate } from '../src/calendarUtils.js'
 import { findEventConflicts } from '../src/scheduleUtils.js'
 import { formatTimeRange, parseTimeRange } from '../src/timeUtils.js'
 
-export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
+export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b'
+export const FALLBACK_GROQ_MODELS = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
+]
 export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 export const MAX_AI_MESSAGES = 12
 export const MAX_AI_MESSAGE_CHARS = 2000
@@ -29,14 +34,16 @@ export function weekdayLabelForDateKey(value) {
   return WEEKDAY_LABELS[parsed.getDay()]
 }
 
-export function buildUpcomingCalendarReference(referenceDateKey, daysCount = 35) {
+export function buildUpcomingCalendarReference(referenceDateKey, daysCount = 75) {
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
   const lines = []
   for (let offset = 0; offset < daysCount; offset += 1) {
     const current = addDays(baseDate, offset)
     const key = dateKey(current)
     const weekday = WEEKDAY_LABELS[current.getDay()]
-    lines.push(`${key} (${weekday})`)
+    const lunar = vietnameseLunarDate(current)
+    const lunarStr = `${pad(lunar.day)}/${pad(lunar.month)}${lunar.leap ? 'N' : ''}`
+    lines.push(`${key} (${weekday}, Âm: ${lunarStr})`)
   }
   return lines.join(', ')
 }
@@ -45,13 +52,13 @@ export function summarizeExistingEvents(existingEvents, referenceDateKey) {
   if (!Array.isArray(existingEvents) || existingEvents.length === 0) return 'Chưa có lịch nào trong khoảng thời gian này.'
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
   const minKey = dateKey(addDays(baseDate, -3))
-  const maxKey = dateKey(addDays(baseDate, 60))
+  const maxKey = dateKey(addDays(baseDate, 75))
 
   const relevant = existingEvents
     .filter((item) => item && typeof item.date === 'string' && item.date >= minKey && item.date <= maxKey)
     .slice(0, 150)
 
-  if (!relevant.length) return 'Không có lịch bận nào trong 60 ngày tới.'
+  if (!relevant.length) return 'Không có lịch bận nào trong 75 ngày tới.'
 
   return relevant
     .map((item) => {
@@ -66,15 +73,15 @@ export function summarizeExistingEvents(existingEvents, referenceDateKey) {
 export function buildAiSystemPrompt(referenceDateKey, existingEvents = []) {
   const todayKey = parseDateKey(referenceDateKey) ? referenceDateKey : bangkokDateKey()
   const todayWeekday = weekdayLabelForDateKey(todayKey)
-  const calendarRef = buildUpcomingCalendarReference(todayKey, 42)
+  const calendarRef = buildUpcomingCalendarReference(todayKey, 75)
   const busySummary = summarizeExistingEvents(existingEvents, todayKey)
 
   return `Bạn là Trợ lý Lập kế hoạch Lịch học thông minh của ứng dụng KMA Schedule.
-Nhiệm vụ của bạn là phân tích mong muốn lịch trình của người dùng (lịch tự học, ôn thi, học nhóm, thể thao, công việc cá nhân, lịch học bổ sung...) và tạo danh sách các sự kiện lịch cụ thể.
+Nhiệm vụ của bạn là phân tích mong muốn lịch trình của người dùng (lịch tự học, ôn thi, học nhóm, thể thao, công việc cá nhân, lịch nhắc theo dương lịch hoặc âm lịch...) và tạo danh sách các sự kiện lịch cụ thể.
 
 THÔNG TIN THỜI GIAN HIỆN TẠI:
 - Hôm nay là: ${todayKey} (${todayWeekday}), múi giờ Việt Nam (UTC+7).
-- Bảng tra cứu lịch dương 42 ngày tới (hãy dựa tuyệt đối vào bảng này để xác định đúng ngày YYYY-MM-DD cho các thứ trong tuần, "tuần này", "tuần sau", "tháng tới"):
+- Bảng tra cứu lịch dương & âm lịch (Âm: DD/MM) trong 75 ngày tới (hãy dựa tuyệt đối vào bảng này để xác định đúng ngày dương lịch YYYY-MM-DD cho các thứ trong tuần, "tuần này", "tuần sau", "tháng tới", hoặc các ngày âm lịch như mùng 1 = Âm: 01/MM, ngày rằm = Âm: 15/MM, ngày trước mùng 1/rằm):
 ${calendarRef}
 
 LỊCH HIỆN CÓ CỦA NGƯỜI DÙNG (để tránh xếp trùng giờ):

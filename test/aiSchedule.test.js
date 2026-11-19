@@ -86,11 +86,11 @@ test('parseAiScheduleResponse normalizes events, strips invalid dates, and marks
   assert.equal(parsed.events[1].conflicts[0].title, 'Mật mã học')
 })
 
-test('buildAiSystemPrompt includes reference date, calendar table, and existing events summary', () => {
+test('buildAiSystemPrompt includes reference date, calendar table with lunar dates, and existing events summary', () => {
   const prompt = buildAiSystemPrompt('2026-11-19', [
     { date: '2026-11-20', title: 'An toàn mạng', time: '13:00 – 15:30' },
   ])
-  assert.match(prompt, /2026-11-19 \(Thứ 5\)/)
+  assert.match(prompt, /2026-11-19 \(Thứ 5, Âm: 11\/10\)/)
   assert.match(prompt, /2026-11-20 \(Thứ 6\) \| 13:00 – 15:30 \| An toàn mạng/)
 })
 
@@ -112,7 +112,7 @@ test('POST /api/ai/schedule validates input and returns structured plan from Gro
   await t.test('calls Groq dependency and returns normalized plan without leaking API key', async () => {
     let capturedCall
     const handler = createAiScheduleHandler({
-      env: { GROQ_API_KEY: 'gsk_super_secret', GROQ_MODEL: 'llama-3.3-70b-versatile' },
+      env: { GROQ_API_KEY: 'gsk_super_secret' },
       callGroq: async (args) => {
         capturedCall = args
         return JSON.stringify({
@@ -141,10 +141,71 @@ test('POST /api/ai/schedule validates input and returns structured plan from Gro
 
     assert.equal(res.statusCode, 200)
     assert.equal(capturedCall.apiKey, 'gsk_super_secret')
+    assert.equal(capturedCall.model, 'openai/gpt-oss-120b')
     assert.equal(res.payload.planTitle, 'Tự học Tiếng Anh')
     assert.equal(res.payload.events.length, 1)
     assert.equal(res.payload.events[0].date, '2026-11-23')
     assert.equal(res.payload.events[0].time, '19:30 – 21:00')
     assert.doesNotMatch(JSON.stringify(res.payload), /gsk_super_secret/)
+  })
+
+  await t.test('automatically falls back to active production model when configured model is retired/unavailable', async () => {
+    const attemptedModels = []
+    const handler = createAiScheduleHandler({
+      env: { GROQ_API_KEY: 'gsk_super_secret', GROQ_MODEL: 'llama-3.3-70b-versatile' },
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body)
+        attemptedModels.push(body.model)
+        if (body.model === 'llama-3.3-70b-versatile') {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({
+              error: {
+                code: 'model_not_found',
+                message: "The model 'llama-3.3-70b-versatile' does not exist or you do not have access to it.",
+              },
+            }),
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    reply: 'Đã lên lịch mua đồ thắp hương trước ngày mùng 1 và ngày rằm.',
+                    planTitle: 'Lịch nhắc mua đồ thắp hương',
+                    events: [
+                      {
+                        date: '2026-11-22',
+                        startTime: '08:00',
+                        endTime: '09:00',
+                        title: 'Mua đồ thắp hương',
+                        code: 'REMIND',
+                        color: 'amber',
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+        }
+      },
+    })
+
+    const res = await invoke(handler, {
+      referenceDate: '2026-11-19',
+      messages: [{ role: 'user', content: 'Thêm lịch nhắc mua đồ thắp hương trước ngày rằm' }],
+      existingEvents: [],
+    })
+
+    assert.equal(res.statusCode, 200)
+    assert.deepEqual(attemptedModels, ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'])
+    assert.equal(res.payload.events.length, 1)
+    assert.equal(res.payload.events[0].title, 'Mua đồ thắp hương')
   })
 })
