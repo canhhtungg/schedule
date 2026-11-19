@@ -108,30 +108,31 @@ export function buildAiSystemPrompt(referenceDateKey, existingEvents = [], refer
   const busySummary = summarizeExistingEvents(existingEvents, todayKey)
 
   return `Bạn là Trợ lý Lập kế hoạch Lịch học thông minh của ứng dụng KMA Schedule.
-Nhiệm vụ: Phân tích yêu cầu thêm lịch mới, sửa kế hoạch, hoặc XÓA lịch đã có và trả về JSON.
+Nhiệm vụ: Phân tích yêu cầu THÊM lịch mới ("add"), SỬA/DỜI lịch đã có ("update"), hoặc XÓA lịch đã có ("delete") và trả về JSON.
 
 THỜI GIAN HIỆN TẠI:
 - Bây giờ là: ${nowTimeKey} ngày ${todayKey} (${todayWeekday}), múi giờ Việt Nam (UTC+7).
 - Lịch 60 ngày tới (từ hôm nay): ${calendarRef}
 - Các ngày Mùng 1 (Âm:01/MM), Rằm (Âm:15/MM) và ngày liền trước Mùng 1/Rằm sắp tới (từ hôm nay trở đi): ${yearSpecialLunarRef}
 
-DANH SÁCH LỊCH HIỆN CÓ (kèm [id: ...] để né trùng giờ hoặc chọn lịch cần xóa):
+DANH SÁCH LỊCH HIỆN CÓ (kèm [id: ...] để né trùng giờ, chọn lịch cần sửa hoặc xóa):
 ${busySummary}
 
 QUY TẮC BẮT BUỘC:
 1. KHÔNG TẠO LỊCH TRONG QUÁ KHỨ: Khi thêm lịch mới ("action": "add", ví dụ người dùng bảo thêm lịch trong tuần/tháng), CHỈ tạo sự kiện bắt đầu từ thời điểm hiện tại (${nowTimeKey} ngày ${todayKey}) trở đi. TUYỆT ĐỐI BỎ QUA các ngày đã qua (< ${todayKey}) và các khung giờ trong ngày hôm nay (${todayKey}) đã trôi qua (< ${nowTimeKey}) để tiết kiệm bộ nhớ và token.
-2. NẾU THÊM LỊCH: Đặt "action": "add". BẮT BUỘC tạo các sự kiện cụ thể trong mảng "events". Ngày trước mùng 1 là ngày liền trước ngày có Âm:01/MM; ngày trước rằm là ngày có Âm:14/MM. Nếu không nêu giờ cụ thể, tự chọn giờ hợp lý (VD sáng 08:00-09:00, chiều 14:00-16:00, tối 19:30-21:30) và né giờ bận.
-3. NẾU XÓA LỊCH (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai"): Đặt "action": "delete". Tìm đúng các sự kiện khớp yêu cầu trong DANH SÁCH LỊCH HIỆN CÓ và đưa vào mảng "events" (giữ nguyên "id", "date", "title") để ứng dụng xóa khỏi bảng danh sách và hủy thông báo.
-4. "date" phải là ngày DƯƠNG LỊCH "YYYY-MM-DD".
+2. NẾU THÊM LỊCH MỚI: Đặt "action": "add". BẮT BUỘC tạo các sự kiện cụ thể trong mảng "events". Ngày trước mùng 1 là ngày liền trước ngày có Âm:01/MM; ngày trước rằm là ngày có Âm:14/MM. Nếu không nêu giờ cụ thể, tự chọn giờ hợp lý (VD sáng 08:00-09:00, chiều 14:00-16:00, tối 19:30-21:30) và né giờ bận.
+3. NẾU SỬA / DỜI LỊCH ĐÃ CÓ TRONG THỜI KHÓA BIỂU (VD: "dời lịch tự học tối nay sang 20h30", "đổi phòng môn An toàn mạng sang phòng 402"): Đặt "action": "update". Tìm sự kiện tương ứng trong DANH SÁCH LỊCH HIỆN CÓ, giữ nguyên "id" của nó và cập nhật các trường mới ("date", "startTime", "endTime", "title", "room",...) trong mảng "events".
+4. NẾU XÓA LỊCH ĐÃ CÓ (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai"): Đặt "action": "delete". Tìm đúng các sự kiện khớp yêu cầu trong DANH SÁCH LỊCH HIỆN CÓ và đưa vào mảng "events" (giữ nguyên "id", "date", "title") để ứng dụng xóa khỏi bảng danh sách và hủy thông báo.
+5. "date" phải là ngày DƯƠNG LỊCH "YYYY-MM-DD".
 
 ĐỊNH DẠNG JSON BẮT BUỘC (KHÔNG BỌC MARKDOWN):
 {
-  "action": "add | delete",
+  "action": "add | update | delete",
   "reply": "Lời giải thích ngắn gọn...",
   "planTitle": "Tiêu đề ngắn gọn",
   "events": [
     {
-      "id": "Giữ nguyên id nếu action=delete, để rỗng nếu action=add",
+      "id": "Giữ nguyên id từ [id: ...] nếu action=update hoặc action=delete; để rỗng nếu action=add",
       "date": "YYYY-MM-DD",
       "startTime": "HH:mm",
       "endTime": "HH:mm",
@@ -202,11 +203,15 @@ export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = [],
     }
   }
 
-  const date = cleanText(rawEvent.date, 10)
-  const title = cleanText(rawEvent.title, 200)
+  const matchedExisting = action === 'update' && requestedId
+    ? existingEvents.find((item) => item && item.id === requestedId)
+    : null
+
+  const date = cleanText(rawEvent.date, 10) || matchedExisting?.date || ''
+  const title = cleanText(rawEvent.title, 200) || matchedExisting?.title || ''
   if (!parseDateKey(date) || !title) return null
 
-  const parsedRange = parseTimeRange(rawEvent.time)
+  const parsedRange = parseTimeRange(rawEvent.time || matchedExisting?.time)
   let startTime = normalizeTimeToken(rawEvent.startTime) || parsedRange.startTime
   let endTime = normalizeTimeToken(rawEvent.endTime) || parsedRange.endTime
   let time = ''
@@ -221,19 +226,24 @@ export function normalizeProposedEvent(rawEvent, index = 0, existingEvents = [],
     }
   }
 
-  const requestedColor = cleanText(rawEvent.color, 20).toLowerCase()
+  const requestedColor = cleanText(rawEvent.color || matchedExisting?.color, 20).toLowerCase()
   const color = COLORS.includes(requestedColor) ? requestedColor : COLORS[index % COLORS.length]
+  const resolvedId = action === 'update' && (matchedExisting?.id || requestedId)
+    ? (matchedExisting?.id || requestedId)
+    : `ai-draft-${date}-${index}`
+
   const draft = {
-    id: `ai-draft-${date}-${index}`,
+    id: resolvedId,
+    targetEventId: action === 'update' ? (matchedExisting?.id || requestedId || '') : '',
     date,
     weekday: weekdayLabelForDateKey(date),
     title,
-    code: cleanText(rawEvent.code, 50),
+    code: cleanText(rawEvent.code ?? matchedExisting?.code, 50),
     startTime,
     endTime,
     time,
-    room: cleanText(rawEvent.room, 100),
-    teacher: cleanText(rawEvent.teacher, 150),
+    room: cleanText(rawEvent.room ?? matchedExisting?.room, 100),
+    teacher: cleanText(rawEvent.teacher ?? matchedExisting?.teacher, 150),
     color,
   }
 
@@ -274,24 +284,31 @@ export function parseAiScheduleResponse(rawContent, existingEvents = [], { refer
     throw new Error('Phản hồi từ AI phải là một JSON object.')
   }
 
-  const action = cleanText(parsed.action, 20).toLowerCase() === 'delete' ? 'delete' : 'add'
+  const rawAction = cleanText(parsed.action, 20).toLowerCase()
+  const action = rawAction === 'delete' ? 'delete' : (rawAction === 'update' ? 'update' : 'add')
   const rawEvents = Array.isArray(parsed.events) ? parsed.events.slice(0, MAX_AI_PROPOSED_EVENTS) : []
   const events = rawEvents
     .map((item, index) => normalizeProposedEvent(item, index, existingEvents, action))
     .filter(Boolean)
-    .filter((item) => action === 'delete' || !isPastProposedEvent(item, referenceDateKey, referenceTimeKey))
+    .filter((item) => action !== 'add' || !isPastProposedEvent(item, referenceDateKey, referenceTimeKey))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '') || a.title.localeCompare(b.title))
 
   const reply = cleanText(parsed.reply, 3000) || (
     events.length
       ? (action === 'delete'
         ? `Mình đã tìm thấy ${events.length} sự kiện cần xóa theo yêu cầu của bạn. Hãy kiểm tra và bấm xác nhận xóa nhé!`
-        : `Mình đã lập kế hoạch gồm ${events.length} sự kiện theo yêu cầu của bạn. Bạn hãy kiểm tra và bấm chốt để thêm vào lịch nhé!`)
+        : action === 'update'
+          ? `Mình đã chuẩn bị ${events.length} cập nhật cho lịch hiện có của bạn. Hãy kiểm tra và bấm xác nhận nhé!`
+          : `Mình đã lập kế hoạch gồm ${events.length} sự kiện theo yêu cầu của bạn. Bạn hãy kiểm tra và bấm chốt để thêm vào lịch nhé!`)
       : 'Mình chưa tìm thấy thông tin ngày giờ cụ thể. Bạn có thể mô tả rõ hơn thời gian và nội dung lịch mong muốn không?'
   )
   const planTitle = cleanText(parsed.planTitle, 160) || (
     events.length
-      ? (action === 'delete' ? `Danh sách lịch cần xóa (${events.length} lịch)` : `Kế hoạch đề xuất (${events.length} lịch)`)
+      ? (action === 'delete'
+        ? `Danh sách lịch cần xóa (${events.length} lịch)`
+        : action === 'update'
+          ? `Danh sách lịch cập nhật (${events.length} lịch)`
+          : `Kế hoạch đề xuất (${events.length} lịch)`)
       : ''
   )
 

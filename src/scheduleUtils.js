@@ -97,6 +97,7 @@ export function deleteEventsBatch(events, targets) {
       idSet.add(target.trim())
     } else if (target && typeof target === 'object') {
       if (typeof target.id === 'string' && target.id.trim()) idSet.add(target.id.trim())
+      if (typeof target.targetEventId === 'string' && target.targetEventId.trim()) idSet.add(target.targetEventId.trim())
       if (typeof target.date === 'string' && typeof target.title === 'string') {
         sigSet.add(`${clean(target.date)}|${clean(target.time)}|${clean(target.title).toLowerCase()}`)
         sigSet.add(`${clean(target.date)}||${clean(target.title).toLowerCase()}`)
@@ -115,4 +116,104 @@ export function deleteEventsBatch(events, targets) {
     }
     return true
   })
+}
+
+export function updateEventsBatch(events, updates) {
+  if (!Array.isArray(events) || !Array.isArray(updates) || updates.length === 0) {
+    return Array.isArray(events) ? sortEvents(events) : []
+  }
+
+  let next = [...events]
+
+  updates.forEach((updateDraft, offset) => {
+    if (!updateDraft || typeof updateDraft !== 'object') return
+    const targetId = clean(updateDraft.targetEventId || updateDraft.id)
+    let existingIndex = targetId ? next.findIndex((item) => item && item.id === targetId) : -1
+
+    if (existingIndex === -1 && updateDraft.date && updateDraft.title) {
+      const normalizedTitle = clean(updateDraft.title).toLowerCase()
+      existingIndex = next.findIndex((item) => item && item.date === clean(updateDraft.date) && clean(item.title).toLowerCase() === normalizedTitle)
+    }
+
+    if (existingIndex !== -1) {
+      const existing = next[existingIndex]
+      const normalized = normalizeEventDraft(updateDraft, existing, existingIndex)
+      next[existingIndex] = normalized
+    } else {
+      const normalized = normalizeEventDraft(updateDraft, null, next.length + offset)
+      next.push(normalized)
+    }
+  })
+
+  return sortEvents(next)
+}
+
+function escapeIcsText(value) {
+  return clean(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n')
+}
+
+export function eventsToIcs(events) {
+  const safeEvents = Array.isArray(events) ? sortEvents(events) : []
+  const nowStamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KMA Planner//Schedule Export//VI',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:KMA Planner',
+    'X-WR-TIMEZONE:Asia/Ho_Chi_Minh',
+  ]
+
+  safeEvents.forEach((event, index) => {
+    if (!event || !parseDateKey(event.date) || !clean(event.title)) return
+    const dateCompact = clean(event.date).replace(/-/g, '')
+    const { startTime, endTime } = parseTimeRange(event.time)
+    const uid = `${clean(event.id) || `kma-${dateCompact}-${index}`}@kma.planner`
+
+    lines.push('BEGIN:VEVENT')
+    lines.push(`UID:${escapeIcsText(uid)}`)
+    lines.push(`DTSTAMP:${nowStamp}`)
+
+    if (startTime) {
+      const startCompact = `${startTime.replace(':', '')}00`
+      const endMin = toMinutes(endTime)
+      const startMin = toMinutes(startTime)
+      let computedEnd = endTime
+      if (endMin === null || (startMin !== null && endMin <= startMin)) {
+        const fallbackMin = Math.min(23 * 60 + 59, (startMin || 0) + 60)
+        const h = String(Math.floor(fallbackMin / 60)).padStart(2, '0')
+        const m = String(fallbackMin % 60).padStart(2, '0')
+        computedEnd = `${h}:${m}`
+      }
+      const endCompact = `${computedEnd.replace(':', '')}00`
+      lines.push(`DTSTART;TZID=Asia/Ho_Chi_Minh:${dateCompact}T${startCompact}`)
+      lines.push(`DTEND;TZID=Asia/Ho_Chi_Minh:${dateCompact}T${endCompact}`)
+    } else {
+      lines.push(`DTSTART;VALUE=DATE:${dateCompact}`)
+      lines.push(`DTEND;VALUE=DATE:${dateCompact}`)
+    }
+
+    const summary = event.code ? `[${clean(event.code)}] ${clean(event.title)}` : clean(event.title)
+    lines.push(`SUMMARY:${escapeIcsText(summary)}`)
+    if (clean(event.room)) {
+      lines.push(`LOCATION:${escapeIcsText(event.room)}`)
+    }
+    const details = [
+      clean(event.code) ? `Mã môn: ${clean(event.code)}` : '',
+      clean(event.teacher) ? `Giảng viên: ${clean(event.teacher)}` : '',
+      clean(event.room) ? `Phòng: ${clean(event.room)}` : '',
+    ].filter(Boolean).join('\n')
+    if (details) {
+      lines.push(`DESCRIPTION:${escapeIcsText(details)}`)
+    }
+    lines.push('END:VEVENT')
+  })
+
+  lines.push('END:VCALENDAR')
+  return `${lines.join('\r\n')}\r\n`
 }

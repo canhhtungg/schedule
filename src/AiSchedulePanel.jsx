@@ -22,6 +22,28 @@ function formatDisplayDate(dateStr) {
   return `${weekday}, ${day}/${month}/${parsed.getFullYear()}`
 }
 
+const AI_CHAT_STORAGE_KEY = 'campus-planner.ai-chat.v1'
+
+function readStoredAiMessages(storage = globalThis.sessionStorage) {
+  try {
+    const raw = storage?.getItem(AI_CHAT_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.slice(-16) : []
+  } catch {
+    return []
+  }
+}
+
+function writeStoredAiMessages(messages, storage = globalThis.sessionStorage) {
+  try {
+    if (!messages?.length) storage?.removeItem(AI_CHAT_STORAGE_KEY)
+    else storage?.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-16)))
+  } catch {
+    // ignore unavailable sessionStorage
+  }
+}
+
 function enrichProposedEvents(rawEvents, existingEvents, action = 'add') {
   return (rawEvents || []).map((item, idx) => {
     const time = item.startTime ? (item.endTime && item.endTime > item.startTime ? `${item.startTime} – ${item.endTime}` : item.startTime) : (item.time || '')
@@ -65,6 +87,7 @@ function PlanCard({
   const [editError, setEditError] = useState('')
 
   const isDeleteAction = action === 'delete'
+  const isUpdateAction = action === 'update'
   const selectedItems = items.filter((item) => item.selected)
   const conflictCount = isDeleteAction ? 0 : selectedItems.filter((item) => item.conflicts?.length > 0).length
   const allSelected = items.length > 0 && selectedItems.length === items.length
@@ -119,10 +142,10 @@ function PlanCard({
       <div className="ai-plan-header">
         <div>
           <span className="ai-plan-badge">
-            <Icon name={isDeleteAction ? 'trash' : 'sparkles'} size={13} />
+            <Icon name={isDeleteAction ? 'trash' : (isUpdateAction ? 'edit' : 'sparkles')} size={13} />
             {committedCount
-              ? (isDeleteAction ? 'ĐÃ XÓA KHỎI LỊCH & HỦY THÔNG BÁO' : 'ĐÃ CHỐT VÀO LỊCH')
-              : (isDeleteAction ? 'DANH SÁCH LỊCH CẦN XÓA' : 'KẾ HOẠCH ĐỀ XUẤT')}
+              ? (isDeleteAction ? 'ĐÃ XÓA KHỎI LỊCH & HỦY THÔNG BÁO' : (isUpdateAction ? 'ĐÃ CẬP NHẬT LỊCH HỌC' : 'ĐÃ CHỐT VÀO LỊCH'))
+              : (isDeleteAction ? 'DANH SÁCH LỊCH CẦN XÓA' : (isUpdateAction ? 'DANH SÁCH LỊCH CẬP NHẬT' : 'KẾ HOẠCH ĐỀ XUẤT'))}
           </span>
           <h4>{planTitle || `Danh sách ${items.length} lịch trình`}</h4>
         </div>
@@ -310,7 +333,9 @@ function PlanCard({
               <span>
                 {isDeleteAction
                   ? <>Đã xóa thành công <strong>{committedCount}</strong> sự kiện khỏi lịch học và cập nhật hủy lịch thông báo!</>
-                  : <>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</>}
+                  : isUpdateAction
+                    ? <>Đã cập nhật thành công <strong>{committedCount}</strong> sự kiện trong lịch học và đồng bộ thông báo!</>
+                    : <>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</>}
               </span>
               {!isDeleteAction && (
                 <div className="ai-committed-dates">
@@ -355,7 +380,9 @@ function PlanCard({
               <Icon name={isDeleteAction ? 'trash' : 'check'} size={16} />
               {isDeleteAction
                 ? `Xác nhận xóa ${selectedItems.length} lịch & hủy thông báo`
-                : `Chốt & Thêm ${selectedItems.length} lịch vào thời khóa biểu`}
+                : isUpdateAction
+                  ? `Xác nhận cập nhật ${selectedItems.length} lịch`
+                  : `Chốt & Thêm ${selectedItems.length} lịch vào thời khóa biểu`}
             </button>
           </>
         )}
@@ -364,14 +391,18 @@ function PlanCard({
   )
 }
 
-export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpenCalendarDate, Icon }) {
+export function AiSchedulePanel({ events, onCommitEvents, onUpdateEvents, onDeleteEvents, onOpenCalendarDate, Icon }) {
   const [serverStatus, setServerStatus] = useState({ loading: true, available: true, model: '', message: '' })
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => readStoredAiMessages())
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const chatEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  useEffect(() => {
+    writeStoredAiMessages(messages)
+  }, [messages])
 
   useEffect(() => {
     let active = true
@@ -426,8 +457,17 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
     setSending(true)
 
     try {
-      const apiMessages = nextHistory.slice(-10).map((msg) => {
-        if (msg.role === 'assistant' && msg.planItems?.length) {
+      const recentSlice = nextHistory.slice(-8)
+      let lastAssistantWithPlanIndex = -1
+      for (let i = recentSlice.length - 1; i >= 0; i -= 1) {
+        if (recentSlice[i].role === 'assistant' && recentSlice[i].planItems?.length) {
+          lastAssistantWithPlanIndex = i
+          break
+        }
+      }
+
+      const apiMessages = recentSlice.map((msg, idx) => {
+        if (idx === lastAssistantWithPlanIndex) {
           const summaryJson = JSON.stringify({
             action: msg.action || 'add',
             reply: msg.content,
@@ -436,9 +476,9 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
               id, date, startTime, endTime, title, code, room, teacher, color,
             })),
           })
-          return { role: 'assistant', content: summaryJson.slice(0, 1950) }
+          return { role: 'assistant', content: summaryJson.slice(0, 1800) }
         }
-        return { role: msg.role, content: msg.content.slice(0, 1950) }
+        return { role: msg.role, content: msg.content.slice(0, 600) }
       })
 
       const now = new Date()
@@ -451,7 +491,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
           messages: apiMessages,
           referenceDate: dateKey(now),
           referenceTime,
-          existingEvents: events.slice(0, 300).map(({ id, date, title, time, room, code, color }) => ({ id, date, title, time, room, code, color })),
+          existingEvents: events.slice(0, 200).map(({ id, date, title, time, room, code, color }) => ({ id, date, title, time, room, code, color })),
         }),
       })
 
@@ -460,7 +500,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
         throw new Error(payload?.message || 'Không thể phân tích lịch học với AI lúc này.')
       }
 
-      const action = payload.action === 'delete' ? 'delete' : 'add'
+      const action = payload.action === 'delete' ? 'delete' : (payload.action === 'update' ? 'update' : 'add')
       const planItems = enrichProposedEvents(payload.events || [], events, action)
       const assistantMessage = {
         id: `ai-${Date.now()}`,
@@ -494,6 +534,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
 
   const resetChat = () => {
     setMessages([])
+    writeStoredAiMessages([])
     setError('')
     setInput('')
     inputRef.current?.focus()
@@ -568,6 +609,17 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
       )
       return
     }
+    if (action === 'update') {
+      onUpdateEvents?.(selectedItems)
+      setMessages((current) =>
+        current.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, committedCount: selectedItems.length, firstCommittedDate: sortedDates[0] }
+            : msg
+        )
+      )
+      return
+    }
     onCommitEvents(selectedItems)
     setMessages((current) =>
       current.map((msg) =>
@@ -613,7 +665,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
             </div>
             <h2>Trợ lý lập kế hoạch học tập AI</h2>
             <p>
-              Nhập lịch trình bạn muốn thêm hoặc xóa bên dưới. AI sẽ tự động phân tích, đối chiếu với lịch hiện có để tạo danh sách sự kiện hoặc chọn đúng các lịch cần xóa cho bạn.
+              Nhập lịch trình bạn muốn thêm, chỉnh sửa hoặc xóa bên dưới. AI sẽ tự động phân tích, đối chiếu với lịch hiện có để tạo danh sách sự kiện hoặc chọn đúng các lịch cần sửa/xóa cho bạn.
             </p>
           </div>
         ) : (
@@ -682,7 +734,7 @@ export function AiSchedulePanel({ events, onCommitEvents, onDeleteEvents, onOpen
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Nhập lịch trình muốn thêm hoặc yêu cầu xóa lịch…"
+          placeholder="Nhập lịch trình muốn thêm, sửa hoặc yêu cầu xóa lịch…"
           disabled={sending}
         />
         <button

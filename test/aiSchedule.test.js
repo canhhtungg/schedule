@@ -110,6 +110,41 @@ test('parseAiScheduleResponse supports action=delete and matches existing event 
   assert.equal(parsed.events[0].time, '08:00 – 09:00')
 })
 
+test('parseAiScheduleResponse supports action=update and preserves targetEventId while checking conflicts against other events', () => {
+  const existingEvents = [
+    { id: 'ev-target-1', date: '2026-11-20', title: 'Học nhóm Tiếng Anh', time: '19:00 – 20:30', room: 'Online', color: 'cyan' },
+    { id: 'ev-other-2', date: '2026-11-22', title: 'Mật mã học', time: '20:00 – 21:30', room: '301', color: 'violet' },
+  ]
+  const raw = JSON.stringify({
+    action: 'update',
+    reply: 'Mình đã dời lịch học nhóm sang ngày 22/11 lúc 18:00.',
+    planTitle: 'Cập nhật lịch học nhóm',
+    events: [
+      {
+        id: 'ev-target-1',
+        date: '2026-11-22',
+        startTime: '18:00',
+        endTime: '19:30',
+        title: 'Học nhóm Tiếng Anh',
+        room: 'Thư viện',
+      },
+    ],
+  })
+
+  const parsed = parseAiScheduleResponse(raw, existingEvents, {
+    referenceDateKey: '2026-11-19',
+    referenceTimeKey: '10:00',
+  })
+  assert.equal(parsed.action, 'update')
+  assert.equal(parsed.events.length, 1)
+  assert.equal(parsed.events[0].id, 'ev-target-1')
+  assert.equal(parsed.events[0].targetEventId, 'ev-target-1')
+  assert.equal(parsed.events[0].date, '2026-11-22')
+  assert.equal(parsed.events[0].time, '18:00 – 19:30')
+  assert.equal(parsed.events[0].room, 'Thư viện')
+  assert.equal(parsed.events[0].conflicts.length, 0)
+})
+
 test('parseAiScheduleResponse filters out past dates and past time slots on the current day when action=add', () => {
   const raw = JSON.stringify({
     action: 'add',

@@ -12,6 +12,15 @@ function publicEvents(events) {
   return events.map(({ id, date, title, time, room }) => ({ id, date, title, time, room }))
 }
 
+function computeNotificationsFingerprint(events, leadMinutes) {
+  if (!Array.isArray(events)) return `${leadMinutes}:`
+  const items = events
+    .filter((item) => item && typeof item.date === 'string' && typeof item.title === 'string')
+    .map((item) => `${item.id || ''}|${item.date}|${item.time || ''}|${item.title}|${item.room || ''}`)
+    .sort()
+  return `${leadMinutes}:${items.join(';')}`
+}
+
 export function useScheduleNotifications(events, storage = globalThis.localStorage) {
   const [settings, setSettings] = useState(() => readNotificationSettings(storage))
   const [server, setServer] = useState({ loading: true, available: false, publicKey: '' })
@@ -21,6 +30,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
   const settingsRef = useRef(settings)
   const operationRef = useRef(Promise.resolve())
   const mountedRef = useRef(true)
+  const lastScheduledFingerprintRef = useRef('')
 
   const persist = useCallback((next) => {
     const saved = saveNotificationSettings(storage, next)
@@ -53,6 +63,8 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
   const schedule = useCallback((eventsSnapshot, leadMinutes) => enqueue(async () => {
     const current = settingsRef.current
     if (!current.enabled || !server.available || !supported || Notification.permission !== 'granted') return
+    const nextFingerprint = computeNotificationsFingerprint(eventsSnapshot, leadMinutes)
+    if (lastScheduledFingerprintRef.current === nextFingerprint) return
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.getSubscription()
     if (!subscription) {
@@ -69,9 +81,11 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
     })
     const payload = await response.json().catch(() => null)
     if (!response.ok) throw new Error(payload?.message || 'Không thể lên lịch thông báo.')
+    lastScheduledFingerprintRef.current = nextFingerprint
     persist({ ...settingsRef.current, messageId: payload.messageId, chainId: payload.chainId })
     if (mountedRef.current) setState({ phase: 'active', count: payload.count, message: payload.count ? `Đã lên lịch ${payload.count} lời nhắc.` : 'Không có lịch hợp lệ sắp tới để nhắc.' })
   }).catch((error) => {
+    lastScheduledFingerprintRef.current = ''
     if (mountedRef.current) setState({ phase: 'error', count: 0, message: error.message || 'Không thể lên lịch thông báo.' })
   }), [enqueue, persist, server.available, supported])
 
@@ -81,7 +95,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
       setState({ phase: 'needs-action', count: 0, message: Notification.permission === 'denied' ? 'Trình duyệt đã chặn quyền thông báo.' : 'Hãy tắt rồi bật lại để cấp quyền.' })
       return undefined
     }
-    const timer = window.setTimeout(() => schedule(events, settings.leadMinutes), 300)
+    const timer = window.setTimeout(() => schedule(events, settings.leadMinutes), 800)
     return () => window.clearTimeout(timer)
   }, [events, schedule, server.available, settings.enabled, settings.leadMinutes, supported])
 
@@ -115,6 +129,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
         }
       }
       if (!subscription) throw new Error('Không thể tạo push subscription.')
+      lastScheduledFingerprintRef.current = ''
       persist({ ...settingsRef.current, enabled: true })
       setState({ phase: 'scheduling', count: 0, message: 'Đang đồng bộ lịch nhắc…' })
     } catch (error) {
@@ -125,6 +140,7 @@ export function useScheduleNotifications(events, storage = globalThis.localStora
 
   const disable = useCallback(async () => {
     const previous = settingsRef.current
+    lastScheduledFingerprintRef.current = ''
     persist({ ...previous, enabled: false, messageId: null, chainId: null })
     setState({ phase: 'idle', count: 0, message: 'Thông báo đang tắt.' })
     await enqueue(async () => {

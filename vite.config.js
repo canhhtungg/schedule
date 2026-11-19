@@ -8,4 +8,14 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('lunar-javascript')) return 'lunar-vendor'
+          if (id.includes('node_modules')) return 'vendor'
+        },
+      },
+    },
+  },
 })

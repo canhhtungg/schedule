@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deleteEvent, deleteEventsBatch, findEventConflicts, saveEvent, saveEventsBatch } from '../src/scheduleUtils.js'
+import { deleteEvent, deleteEventsBatch, eventsToIcs, findEventConflicts, saveEvent, saveEventsBatch, updateEventsBatch } from '../src/scheduleUtils.js'
 
 test('creates, edits, sorts, and deletes session events', () => {
   const existing = [{ id: 'one', date: '2026-09-30', title: 'Môn cũ', code: '', time: '', room: '', teacher: '', color: 'violet' }]
@@ -46,6 +46,47 @@ test('deleteEventsBatch removes events by id or by date+title+time signature', (
   ])
   assert.equal(remaining.length, 1)
   assert.equal(remaining[0].id, 'e3')
+})
+
+test('updateEventsBatch updates existing events by targetEventId or id and preserves event identity', () => {
+  const existing = [
+    { id: 'e1', date: '2026-11-20', title: 'Ôn tập Tiếng Anh', code: 'ENG', time: '19:00 – 20:30', room: 'Online', teacher: '', color: 'cyan' },
+    { id: 'e2', date: '2026-11-21', title: 'An toàn mạng', code: 'NET', time: '07:00 – 09:25', room: '301', teacher: 'Thầy A', color: 'violet' },
+  ]
+  const updated = updateEventsBatch(existing, [
+    {
+      id: 'ai-draft-1',
+      targetEventId: 'e1',
+      date: '2026-11-22',
+      title: 'Ôn tập Tiếng Anh (Dời lịch)',
+      code: 'ENG',
+      time: '20:00 – 21:30',
+      room: 'Phòng 202',
+      color: 'amber',
+    },
+  ])
+  assert.equal(updated.length, 2)
+  const target = updated.find((item) => item.id === 'e1')
+  assert.ok(target)
+  assert.equal(target.date, '2026-11-22')
+  assert.equal(target.title, 'Ôn tập Tiếng Anh (Dời lịch)')
+  assert.equal(target.time, '20:00 – 21:30')
+  assert.equal(target.room, 'Phòng 202')
+})
+
+test('eventsToIcs formats events into a valid iCalendar VCALENDAR string', () => {
+  const events = [
+    { id: 'ev-1', date: '2026-11-20', title: 'An toàn mạng', code: 'AT1', time: '07:00 – 09:25', room: 'TA1-301', teacher: 'Nguyễn Văn A' },
+  ]
+  const ics = eventsToIcs(events)
+  assert.match(ics, /BEGIN:VCALENDAR/)
+  assert.match(ics, /BEGIN:VEVENT/)
+  assert.match(ics, /UID:ev-1@kma\.planner/)
+  assert.match(ics, /DTSTART;TZID=Asia\/Ho_Chi_Minh:20261120T070000/)
+  assert.match(ics, /DTEND;TZID=Asia\/Ho_Chi_Minh:20261120T092500/)
+  assert.match(ics, /SUMMARY:\[AT1\] An toàn mạng/)
+  assert.match(ics, /LOCATION:TA1-301/)
+  assert.match(ics, /END:VCALENDAR/)
 })
 
 test('findEventConflicts detects overlapping time ranges on the same date', () => {

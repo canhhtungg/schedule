@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { addDays, dateKey, isLunarHighlight, lunarLabel, pad, parseDateKey, sameDay, shiftMonth, startOfWeek, vietnameseLunarDate } from './calendarUtils.js'
-import { deleteEvent, deleteEventsBatch, saveEvent, saveEventsBatch } from './scheduleUtils.js'
+import { deleteEvent, deleteEventsBatch, eventsToIcs, saveEvent, saveEventsBatch, updateEventsBatch } from './scheduleUtils.js'
 import { applyThemeSetting, readShowLunarSetting, readThemeSetting, saveShowLunarSetting, saveThemeSetting } from './settingsUtils.js'
 import { clearStoredSession, readStoredSession, writeStoredSession } from './sessionStore.js'
 import { NOTIFICATION_LEADS } from './notificationSettings.js'
 import { useScheduleNotifications } from './useScheduleNotifications.js'
 import { formatTimeRange, parseTimeRange } from './timeUtils.js'
-import { AiSchedulePanel } from './AiSchedulePanel.jsx'
+
+const AiSchedulePanel = lazy(() => import('./AiSchedulePanel.jsx').then((module) => ({ default: module.AiSchedulePanel })))
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTH_NAMES = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -162,12 +163,24 @@ function EventDetails({ selected, events, onAdd, onEdit, onDelete }) {
   </aside>
 }
 
-function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, notifications, onBack }) {
+function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, notifications, events, onBack }) {
   const themes = [
     { value: 'light', label: 'Sáng', description: 'Giao diện sáng, rõ nét' },
     { value: 'dark', label: 'Tối', description: 'Dịu mắt trong môi trường tối' },
     { value: 'system', label: 'Hệ thống', description: 'Tự động theo thiết bị' },
   ]
+  const exportIcs = () => {
+    const icsContent = eventsToIcs(events)
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `kma-schedule-${dateKey(new Date())}.ics`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
   return <section className="settings-panel" aria-labelledby="settings-title">
     <div className="settings-heading">
       <button className="back-button" type="button" onClick={onBack}><Icon name="chevronLeft" size={17}/>Quay lại Lịch học</button>
@@ -198,6 +211,13 @@ function SettingsPanel({ theme, showLunar, onThemeChange, onShowLunarChange, not
       </label>
       <p className="field-help">Các lịch có phòng học sẽ tự động được nhắc lại thêm 1 lần trước 15 phút.</p>
       <p className={`notification-status ${notifications.state.phase === 'error' || notifications.state.phase === 'needs-action' ? 'warning' : ''}`} role="status">{notifications.availability}</p>
+    </div>
+    <div className="settings-group setting-row">
+      <div className="setting-copy">
+        <h3>Đồng bộ lịch (.ics)</h3>
+        <p className="field-help">Xuất toàn bộ lịch học sang Apple Calendar, Google Calendar hoặc Outlook.</p>
+      </div>
+      <button className="test-notification-button" type="button" disabled={!Array.isArray(events) || events.length === 0} onClick={exportIcs}>Xuất file .ics</button>
     </div>
   </section>
 }
@@ -232,6 +252,14 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const save = (draft, editingId) => { updateEvents((current) => saveEvent(current, draft, editingId)); const date = parseDateKey(draft.date); if (date) selectDate(date) }
   const saveBatch = (drafts) => {
     updateEvents((current) => saveEventsBatch(current, drafts))
+    if (Array.isArray(drafts) && drafts.length > 0) {
+      const sortedDates = drafts.map((item) => item?.date).filter(Boolean).sort()
+      const firstParsed = parseDateKey(sortedDates[0])
+      if (firstParsed) selectDate(firstParsed)
+    }
+  }
+  const updateBatch = (drafts) => {
+    updateEvents((current) => updateEventsBatch(current, drafts))
     if (Array.isArray(drafts) && drafts.length > 0) {
       const sortedDates = drafts.map((item) => item?.date).filter(Boolean).sort()
       const firstParsed = parseDateKey(sortedDates[0])
@@ -384,7 +412,7 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
       </div>
     )}
     <main ref={workspaceRef} className="workspace" style={workspaceStyle}><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{topbarEyebrow}</p><h1>{topbarTitle}</h1></div>{page === 'calendar' && <button className="ai-quick-button" type="button" aria-label="Thêm lịch với AI" title="Thêm lịch với AI" onClick={() => openPage('ai')}><Icon name="sparkles" size={19}/></button>}</header>
-      {page === 'calendar' ? renderCalendarContent() : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onDeleteEvents={deleteBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
+      {page === 'calendar' ? renderCalendarContent() : page === 'ai' ? <Suspense fallback={<section className="ai-panel" aria-busy="true"><p className="field-help">Đang tải trợ lý AI…</p></section>}><AiSchedulePanel events={events} onCommitEvents={saveBatch} onUpdateEvents={updateBatch} onDeleteEvents={deleteBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /></Suspense> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} events={events} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>
