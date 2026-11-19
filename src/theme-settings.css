@@ -148,9 +148,9 @@ body { color: var(--text); background: var(--page); }
 }
 
 /* AI Schedule Assistant Tab */
-.app-shell.swiping-back { overflow-x: hidden; background: var(--surface-subtle); }
-.app-shell.swiping-back .workspace { position: relative; z-index: 5; will-change: transform; background: var(--page); }
-.swipe-back-indicator { position: fixed; z-index: 4; display: inline-flex; height: 38px; left: 10px; top: 50%; padding: 0 13px 0 9px; align-items: center; gap: 5px; pointer-events: none; border: 1px solid var(--border); border-radius: 999px; color: var(--violet); background: var(--surface); font-size: 12px; font-weight: 800; box-shadow: 0 6px 20px var(--shadow); }
+.app-shell.swiping-back { position: relative; min-height: 100vh; overflow: hidden; background: var(--page); }
+.app-shell.swiping-back .swipe-underlay { position: relative; z-index: 1; pointer-events: none; user-select: none; will-change: transform, filter; background: var(--page); }
+.app-shell.swiping-back main.workspace { z-index: 10; min-height: 100vh; touch-action: none; will-change: transform; background: var(--page); }
 
 .ai-quick-button { display: grid; width: 40px; height: 40px; margin-left: auto; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--violet); background: var(--surface); box-shadow: 0 3px 10px var(--shadow); transition: transform .18s, background .18s, color .18s, border-color .18s; }
 .ai-quick-button:hover { color: #fff; border-color: var(--violet); background: var(--violet); transform: translateY(-1px); }

@@ -214,6 +214,7 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [modalEvent, setModalEvent] = useState(undefined)
   const [swipeState, setSwipeState] = useState({ offset: 0, dragging: false, completing: false })
+  const workspaceRef = useRef(null)
   const swipeStartRef = useRef(null)
   const swipeTimerRef = useRef(null)
   const notifications = useScheduleNotifications(events)
@@ -249,84 +250,131 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
   const topbarEyebrow = page === 'calendar' ? 'THỜI KHOÁ BIỂU' : (page === 'ai' ? 'TRỢ LÝ GROQ AI' : 'KMA PLANNER')
   const topbarTitle = page === 'calendar' ? 'Lịch học của bạn' : (page === 'ai' ? 'Thêm lịch với AI' : 'Tùy chỉnh ứng dụng')
 
-  const handleTouchStart = (event) => {
-    if (page === 'calendar' || menuOpen || swipeState.completing || event.touches.length !== 1) {
-      swipeStartRef.current = null
-      return
-    }
-    const touch = event.touches[0]
-    if (touch.clientX <= 42) {
-      swipeStartRef.current = { x: touch.clientX, y: touch.clientY, locked: null }
-    } else {
-      swipeStartRef.current = null
-    }
-  }
+  useEffect(() => {
+    const element = workspaceRef.current
+    if (!element) return undefined
 
-  const handleTouchMove = (event) => {
-    const start = swipeStartRef.current
-    if (!start || page === 'calendar' || menuOpen || event.touches.length !== 1) return
-    const touch = event.touches[0]
-    const deltaX = touch.clientX - start.x
-    const deltaY = Math.abs(touch.clientY - start.y)
-
-    if (start.locked === null) {
-      if (deltaX < 8 && deltaY < 8) return
-      if (deltaX > 0 && deltaX > deltaY * 1.25) {
-        start.locked = 'horizontal'
-      } else {
-        start.locked = 'vertical'
+    const onTouchStart = (event) => {
+      if (page === 'calendar' || menuOpen || event.touches.length !== 1) {
         swipeStartRef.current = null
         return
       }
-    }
-
-    if (start.locked === 'horizontal') {
-      const clampedOffset = Math.max(0, Math.min(deltaX, window.innerWidth))
-      setSwipeState({ offset: clampedOffset, dragging: true, completing: false })
-    }
-  }
-
-  const handleTouchEnd = () => {
-    const start = swipeStartRef.current
-    swipeStartRef.current = null
-    if (!start || start.locked !== 'horizontal') {
-      if (swipeState.offset !== 0 || swipeState.dragging) {
-        setSwipeState({ offset: 0, dragging: false, completing: false })
+      const touch = event.touches[0]
+      if (touch.clientX <= 44) {
+        swipeStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          scrollY: window.scrollY,
+          locked: null,
+          offset: 0,
+        }
+      } else {
+        swipeStartRef.current = null
       }
-      return
     }
 
-    const viewportWidth = window.innerWidth || 360
-    const threshold = Math.min(105, Math.max(68, viewportWidth * 0.24))
+    const onTouchMove = (event) => {
+      const start = swipeStartRef.current
+      if (!start || page === 'calendar' || menuOpen || event.touches.length !== 1) return
+      const touch = event.touches[0]
+      const deltaX = touch.clientX - start.x
+      const deltaY = Math.abs(touch.clientY - start.y)
 
-    if (swipeState.offset >= threshold) {
-      setSwipeState({ offset: viewportWidth, dragging: false, completing: true })
-      swipeTimerRef.current = window.setTimeout(() => {
-        setPage('calendar')
-        setSwipeState({ offset: 0, dragging: false, completing: false })
-      }, 210)
-    } else {
-      setSwipeState({ offset: 0, dragging: false, completing: false })
+      if (start.locked === null) {
+        if (Math.abs(deltaX) < 7 && deltaY < 7) return
+        if (deltaX > 0 && deltaX > deltaY * 1.15) {
+          start.locked = 'horizontal'
+        } else {
+          start.locked = 'vertical'
+          swipeStartRef.current = null
+          return
+        }
+      }
+
+      if (start.locked === 'horizontal') {
+        if (event.cancelable) event.preventDefault()
+        const viewportWidth = window.innerWidth || 360
+        const clampedOffset = Math.max(0, Math.min(deltaX, viewportWidth))
+        start.offset = clampedOffset
+        setSwipeState({ offset: clampedOffset, dragging: true, completing: false, scrollY: start.scrollY })
+      }
     }
-  }
 
-  const swipeActive = swipeState.offset > 0 || swipeState.completing
-  const swipeProgress = Math.min(1, swipeState.offset / 110)
+    const onTouchEnd = () => {
+      const start = swipeStartRef.current
+      swipeStartRef.current = null
+      if (!start || start.locked !== 'horizontal') return
+
+      const currentOffset = start.offset || 0
+      const viewportWidth = window.innerWidth || 360
+      const threshold = Math.min(110, Math.max(68, viewportWidth * 0.24))
+
+      if (currentOffset >= threshold) {
+        setSwipeState({ offset: viewportWidth, dragging: false, completing: true, scrollY: start.scrollY })
+        swipeTimerRef.current = window.setTimeout(() => {
+          window.scrollTo(0, 0)
+          setPage('calendar')
+          setSwipeState({ offset: 0, dragging: false, completing: false, scrollY: 0 })
+        }, 220)
+      } else {
+        setSwipeState({ offset: 0, dragging: false, completing: false, scrollY: 0 })
+      }
+    }
+
+    element.addEventListener('touchstart', onTouchStart, { passive: true })
+    element.addEventListener('touchmove', onTouchMove, { passive: false })
+    element.addEventListener('touchend', onTouchEnd)
+    element.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      element.removeEventListener('touchstart', onTouchStart)
+      element.removeEventListener('touchmove', onTouchMove)
+      element.removeEventListener('touchend', onTouchEnd)
+      element.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [menuOpen, page])
+
+  const swipeActive = page !== 'calendar' && (swipeState.offset > 0 || swipeState.completing)
+  const viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 360
+  const swipeRatio = Math.min(1, swipeState.offset / viewportWidth)
+  const underlayParallaxX = Math.round((swipeRatio - 1) * viewportWidth * 0.28)
+
   const workspaceStyle = swipeActive ? {
+    position: 'fixed',
+    top: `-${swipeState.scrollY || 0}px`,
+    left: 0,
+    right: 0,
+    width: '100%',
     transform: `translate3d(${swipeState.offset}px, 0, 0)`,
-    transition: swipeState.dragging ? 'none' : 'transform 0.21s cubic-bezier(0.22, 1, 0.36, 1)',
-    boxShadow: '-12px 0 34px rgba(15, 18, 26, 0.16)',
+    transition: swipeState.dragging ? 'none' : 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+    boxShadow: '-16px 0 40px rgba(0, 0, 0, 0.35)',
   } : undefined
+
+  const underlayStyle = swipeActive ? {
+    transform: `translate3d(${underlayParallaxX}px, 0, 0)`,
+    transition: swipeState.dragging ? 'none' : 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+    filter: `brightness(${0.72 + swipeRatio * 0.28})`,
+  } : undefined
+
+  const renderCalendarContent = () => <>
+    <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
+    <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
+  </>
 
   return <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${swipeActive ? 'swiping-back' : ''}`}>
     <aside className={`sidebar ${menuOpen ? 'open' : ''}`} aria-label="Điều hướng chính"><div className="brand brand-light"><span className="brand-mark"><img src="/system-logo.png" alt="" /></span><span className="brand-name">KMA Planner</span><button className="mobile-close" aria-label="Đóng menu" onClick={() => setMenuOpen(false)}><Icon name="close" /></button></div><button className="sidebar-collapse" type="button" aria-label={sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} aria-expanded={!sidebarCollapsed} onClick={() => setSidebarCollapsed((value) => !value)}><Icon name={sidebarCollapsed ? 'chevronRight' : 'chevronLeft'} size={16}/></button><nav><button aria-label="Lịch học" className={`nav-item ${page === 'calendar' ? 'active' : ''}`} aria-current={page === 'calendar' ? 'page' : undefined} onClick={() => openPage('calendar')}><Icon name="calendar"/><span className="nav-label">Lịch học</span></button><button aria-label="Thêm lịch với AI" className={`nav-item ${page === 'ai' ? 'active' : ''}`} aria-current={page === 'ai' ? 'page' : undefined} onClick={() => openPage('ai')}><Icon name="sparkles"/><span className="nav-label">Thêm lịch với AI</span></button><button aria-label="Cài đặt" className={`nav-item ${page === 'settings' ? 'active' : ''}`} aria-current={page === 'settings' ? 'page' : undefined} onClick={() => openPage('settings')}><Icon name="settings"/><span className="nav-label">Cài đặt</span></button></nav><button className="profile" onClick={logout} aria-label={`Đăng xuất tài khoản ${user}`}> <span className="avatar">{user.slice(0, 2)}</span><span className="profile-copy"><strong>{user}</strong><small>{mode === 'qldt' ? 'Dữ liệu QLĐT' : 'Dữ liệu đã nhập'}</small></span><Icon name="logout"/></button></aside>
     {menuOpen && <button className="scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
-    {swipeActive && <div className="swipe-back-indicator" aria-hidden="true" style={{ opacity: swipeProgress, transform: `translate3d(${Math.min(swipeState.offset * 0.35, 36)}px, -50%, 0) scale(${0.82 + swipeProgress * 0.18})` }}><Icon name="chevronLeft" size={18}/><span>Lịch học</span></div>}
-    <main className="workspace" style={workspaceStyle} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd}><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{topbarEyebrow}</p><h1>{topbarTitle}</h1></div>{page === 'calendar' && <button className="ai-quick-button" type="button" aria-label="Thêm lịch với AI" title="Thêm lịch với AI" onClick={() => openPage('ai')}><Icon name="sparkles" size={19}/></button>}</header>
-      {page === 'calendar' ? <>
-        <section className="toolbar"><div className="period-nav"><button className="today-button" onClick={goToday}>Hôm nay</button><button aria-label="Kỳ trước" onClick={() => move(-1)}><Icon name="chevronLeft"/></button><button aria-label="Kỳ sau" onClick={() => move(1)}><Icon name="chevronRight"/></button><h2>{periodLabel}</h2></div><div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Tháng</button><button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Tuần</button></div></section>
-        <div className="schedule-layout"><section className="calendar-panel">{view === 'month' ? <MonthView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/> : <WeekView cursor={cursor} events={events} selected={selected} onSelect={selectDate} showLunar={showLunar}/>}</section><EventDetails selected={selected} events={events} onAdd={() => setModalEvent(null)} onEdit={setModalEvent} onDelete={remove}/></div>
-      </> : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
+    {swipeActive && (
+      <div className="workspace swipe-underlay" style={underlayStyle} aria-hidden="true">
+        <header className="topbar">
+          <button className="menu-button" tabIndex={-1}><Icon name="menu"/></button>
+          <div><p className="eyebrow">THỜI KHOÁ BIỂU</p><h1>Lịch học của bạn</h1></div>
+          <button className="ai-quick-button" type="button" tabIndex={-1}><Icon name="sparkles" size={19}/></button>
+        </header>
+        {renderCalendarContent()}
+      </div>
+    )}
+    <main ref={workspaceRef} className="workspace" style={workspaceStyle}><header className="topbar"><button className="menu-button" aria-label="Mở menu" onClick={() => setMenuOpen(true)}><Icon name="menu"/></button><div><p className="eyebrow">{topbarEyebrow}</p><h1>{topbarTitle}</h1></div>{page === 'calendar' && <button className="ai-quick-button" type="button" aria-label="Thêm lịch với AI" title="Thêm lịch với AI" onClick={() => openPage('ai')}><Icon name="sparkles" size={19}/></button>}</header>
+      {page === 'calendar' ? renderCalendarContent() : page === 'ai' ? <AiSchedulePanel events={events} onCommitEvents={saveBatch} onOpenCalendarDate={openCalendarAtDate} Icon={Icon} /> : <SettingsPanel theme={theme} showLunar={showLunar} onThemeChange={onThemeChange} onShowLunarChange={onShowLunarChange} notifications={notifications} onBack={() => openPage('calendar')}/>}
     </main>
     {modalEvent !== undefined && <EventModal event={modalEvent} selected={selected} onClose={() => setModalEvent(undefined)} onSave={save}/>}
   </div>
