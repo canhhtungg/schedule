@@ -142,16 +142,19 @@ function validateExistingEvents(events) {
     }))
 }
 
-function isModelUnavailableError(status, errorPayload) {
-  if (status === 404) return true
+function isModelUnavailableOrOverLimitError(status, errorPayload) {
+  if (status === 404 || status === 413) return true
   const code = String(errorPayload?.code || '').toLowerCase()
   const message = String(errorPayload?.message || '').toLowerCase()
   return (
     code === 'model_not_found'
     || code === 'model_decommissioned'
+    || code === 'rate_limit_exceeded'
     || message.includes('does not exist or you do not have access')
     || message.includes('has been decommissioned')
     || message.includes('model not found')
+    || message.includes('request too large for model')
+    || message.includes('tokens per minute (tpm)')
   )
 }
 
@@ -162,6 +165,7 @@ async function defaultCallGroq({ apiKey, model, timeoutMs, systemPrompt, message
 
   try {
     let lastUpstreamMsg = ''
+    let lastStatus = 502
 
     for (let index = 0; index < candidateModels.length; index += 1) {
       const candidateModel = candidateModels[index]
@@ -174,7 +178,7 @@ async function defaultCallGroq({ apiKey, model, timeoutMs, systemPrompt, message
         body: JSON.stringify({
           model: candidateModel,
           temperature: 0.2,
-          max_completion_tokens: 8192,
+          max_completion_tokens: 3072,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: systemPrompt },
@@ -188,14 +192,15 @@ async function defaultCallGroq({ apiKey, model, timeoutMs, systemPrompt, message
       if (!response.ok) {
         const upstreamMsg = data?.error?.message || ''
         lastUpstreamMsg = upstreamMsg
+        lastStatus = response.status
         if (response.status === 401 || response.status === 403) {
           throw new AiApiError(502, 'GROQ_AUTH_FAILED', 'GROQ_API_KEY trên máy chủ không hợp lệ hoặc đã hết hạn.')
         }
-        if (response.status === 429) {
-          throw new AiApiError(429, 'GROQ_RATE_LIMIT', 'Groq AI đang quá tải hoặc đạt giới hạn request. Vui lòng thử lại sau ít giây.')
-        }
-        if (isModelUnavailableError(response.status, data?.error) && index < candidateModels.length - 1) {
+        if (isModelUnavailableOrOverLimitError(response.status, data?.error) && index < candidateModels.length - 1) {
           continue
+        }
+        if (response.status === 429) {
+          throw new AiApiError(429, 'GROQ_RATE_LIMIT', 'Groq AI đang quá tải hoặc đạt giới hạn request mỗi phút. Vui lòng thử lại sau ít giây.')
         }
         throw new AiApiError(502, 'GROQ_UPSTREAM_ERROR', upstreamMsg ? `Groq AI trả lỗi: ${upstreamMsg}` : 'Không thể xử lý yêu cầu với Groq AI lúc này.')
       }
@@ -207,6 +212,9 @@ async function defaultCallGroq({ apiKey, model, timeoutMs, systemPrompt, message
       return content
     }
 
+    if (lastStatus === 429) {
+      throw new AiApiError(429, 'GROQ_RATE_LIMIT', 'Groq AI đang quá tải hoặc đạt giới hạn request mỗi phút. Vui lòng thử lại sau ít giây.')
+    }
     throw new AiApiError(502, 'GROQ_UPSTREAM_ERROR', lastUpstreamMsg ? `Groq AI trả lỗi: ${lastUpstreamMsg}` : 'Không thể xử lý yêu cầu với Groq AI lúc này.')
   } catch (error) {
     if (error instanceof AiApiError) throw error

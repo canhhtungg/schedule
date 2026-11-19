@@ -34,57 +34,60 @@ export function weekdayLabelForDateKey(value) {
   return WEEKDAY_LABELS[parsed.getDay()]
 }
 
-export function buildUpcomingCalendarReference(referenceDateKey, daysCount = 120) {
+const SHORT_WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+
+export function buildUpcomingCalendarReference(referenceDateKey, daysCount = 60) {
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
   const lines = []
   for (let offset = 0; offset < daysCount; offset += 1) {
     const current = addDays(baseDate, offset)
     const key = dateKey(current)
-    const weekday = WEEKDAY_LABELS[current.getDay()]
+    const weekday = SHORT_WEEKDAYS[current.getDay()]
     const lunar = vietnameseLunarDate(current)
     const lunarStr = `${pad(lunar.day)}/${pad(lunar.month)}${lunar.leap ? 'N' : ''}`
-    lines.push(`${key} (${weekday}, Âm: ${lunarStr})`)
+    lines.push(`${key}(${weekday},Âm:${lunarStr})`)
   }
-  return lines.join(', ')
+  return lines.join(' ')
 }
 
 export function buildYearLunarSpecialDaysReference(referenceDateKey) {
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
   const startOfYear = new Date(baseDate.getFullYear(), 0, 1)
   const lines = []
-  for (let offset = 0; offset < 400; offset += 1) {
+  for (let offset = 0; offset < 370; offset += 1) {
     const current = addDays(startOfYear, offset)
     const lunar = vietnameseLunarDate(current)
-    if (lunar.day === 1 || lunar.day === 14 || lunar.day === 15 || lunar.day >= 29) {
+    const nextLunar = vietnameseLunarDate(addDays(current, 1))
+    const isBeforeMung1 = nextLunar.day === 1
+    const isBeforeRam = lunar.day === 14
+    if (lunar.day === 1 || lunar.day === 15 || isBeforeMung1 || isBeforeRam) {
       const key = dateKey(current)
-      const weekday = WEEKDAY_LABELS[current.getDay()]
       const lunarStr = `${pad(lunar.day)}/${pad(lunar.month)}${lunar.leap ? 'N' : ''}`
-      lines.push(`${key} (${weekday}, Âm: ${lunarStr})`)
+      lines.push(`${key}(Âm:${lunarStr})`)
     }
   }
-  return lines.join(', ')
+  return lines.join(' ')
 }
 
 export function summarizeExistingEvents(existingEvents, referenceDateKey) {
-  if (!Array.isArray(existingEvents) || existingEvents.length === 0) return 'Chưa có lịch nào trong khoảng thời gian này.'
+  if (!Array.isArray(existingEvents) || existingEvents.length === 0) return 'Chưa có lịch nào.'
   const baseDate = parseDateKey(referenceDateKey) || parseDateKey(bangkokDateKey())
-  const minKey = dateKey(addDays(baseDate, -14))
-  const maxKey = dateKey(addDays(baseDate, 180))
+  const minKey = dateKey(addDays(baseDate, -7))
+  const maxKey = dateKey(addDays(baseDate, 120))
 
   const relevant = existingEvents
     .filter((item) => item && typeof item.date === 'string' && item.date >= minKey && item.date <= maxKey)
-    .slice(0, 200)
+    .slice(0, 80)
 
   if (!relevant.length) return 'Không có lịch nào trong khoảng thời gian này.'
 
   return relevant
     .map((item) => {
-      const idStr = cleanText(item.id, 120)
+      const idStr = cleanText(item.id, 60)
       const weekday = weekdayLabelForDateKey(item.date)
-      const timeStr = cleanText(item.time, 50) || 'Cả ngày'
-      const titleStr = cleanText(item.title, 120)
-      const roomStr = cleanText(item.room, 80)
-      return `- [id: ${idStr}] ${item.date} (${weekday}) | ${timeStr} | ${titleStr}${roomStr ? ` | Phòng: ${roomStr}` : ''}`
+      const timeStr = cleanText(item.time, 40) || 'Cả ngày'
+      const titleStr = cleanText(item.title, 90)
+      return `- [id: ${idStr}] ${item.date} (${weekday}) | ${timeStr} | ${titleStr}`
     })
     .join('\n')
 }
@@ -92,50 +95,41 @@ export function summarizeExistingEvents(existingEvents, referenceDateKey) {
 export function buildAiSystemPrompt(referenceDateKey, existingEvents = []) {
   const todayKey = parseDateKey(referenceDateKey) ? referenceDateKey : bangkokDateKey()
   const todayWeekday = weekdayLabelForDateKey(todayKey)
-  const calendarRef = buildUpcomingCalendarReference(todayKey, 120)
+  const calendarRef = buildUpcomingCalendarReference(todayKey, 60)
   const yearSpecialLunarRef = buildYearLunarSpecialDaysReference(todayKey)
   const busySummary = summarizeExistingEvents(existingEvents, todayKey)
 
   return `Bạn là Trợ lý Lập kế hoạch Lịch học thông minh của ứng dụng KMA Schedule.
-Nhiệm vụ của bạn là phân tích mong muốn lịch trình của người dùng (thêm lịch mới, chỉnh sửa kế hoạch, hoặc XÓA các lịch đã có trong thời khóa biểu) và trả về danh sách sự kiện cụ thể trong mảng "events".
+Nhiệm vụ: Phân tích yêu cầu thêm lịch mới, sửa kế hoạch, hoặc XÓA lịch đã có và trả về JSON.
 
-THÔNG TIN THỜI GIAN HIỆN TẠI:
-- Hôm nay là: ${todayKey} (${todayWeekday}), múi giờ Việt Nam (UTC+7).
-- Bảng tra cứu chi tiết từng ngày dương lịch & âm lịch (Âm: DD/MM) trong 120 ngày tới:
-${calendarRef}
-- Bảng tra cứu nhanh các ngày Mùng 1 (Âm: 01/MM), Ngày Rằm (Âm: 15/MM) và ngày liền trước mùng 1/rằm (Âm: 14/MM, 29/MM, 30/MM) trong cả năm:
-${yearSpecialLunarRef}
+THỜI GIAN HIỆN TẠI:
+- Hôm nay: ${todayKey} (${todayWeekday}), UTC+7.
+- Lịch 60 ngày tới: ${calendarRef}
+- Các ngày Mùng 1 (Âm:01/MM), Rằm (Âm:15/MM) và ngày liền trước Mùng 1/Rằm trong năm: ${yearSpecialLunarRef}
 
-DANH SÁCH LỊCH HIỆN CÓ CỦA NGƯỜI DÙNG (kèm [id: ...] để đối chiếu trùng giờ hoặc chọn lịch cần xóa):
+DANH SÁCH LỊCH HIỆN CÓ (kèm [id: ...] để né trùng giờ hoặc chọn lịch cần xóa):
 ${busySummary}
 
-QUY TẮC LẬP KẾ HOẠCH BẮT BUỘC:
-1. NẾU NGƯỜI DÙNG YÊU CẦU THÊM LỊCH / LÊN KẾ HOẠCH:
-   - Đặt "action": "add".
-   - BẮT BUỘC sinh ra các phần tử sự kiện cụ thể trong mảng "events" (KHÔNG ĐƯỢC để "events": [] rồi chỉ liệt kê ngày trong "reply").
-   - Nếu người dùng nói "tháng 11 và tháng 12" kèm "mùng 1 hoặc rằm (âm lịch)", hãy liệt kê đầy đủ các ngày thỏa mãn vào mảng "events". Lưu ý: "ngày trước ngày mùng 1" là ngày dương lịch liền trước ngày có ` + '`Âm: 01/MM`' + ` (tức ngày 29 hoặc 30 âm lịch cuối tháng trước), và "ngày trước ngày rằm" là ngày dương lịch liền trước ngày có ` + '`Âm: 15/MM`' + ` (tức ngày ` + '`Âm: 14/MM`' + `).
-   - Nếu người dùng nói buổi sáng/chiều/tối mà không nêu giờ cụ thể, hãy tự chọn khung giờ hợp lý (VD: sáng "08:00" đến "09:00", chiều "14:00" đến "16:00", tối "19:30" đến "21:30") và ưu tiên NÉ các khung giờ đã bận trong DANH SÁCH LỊCH HIỆN CÓ.
-2. NẾU NGƯỜI DÙNG YÊU CẦU XÓA / HỦY / GỠ BỎ CÁC LỊCH ĐÃ CÓ TRONG THỜI KHÓA BIỂU (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai", "xóa hết lịch tự học tiếng Anh"):
-   - Đặt "action": "delete".
-   - Tìm đúng các sự kiện khớp với yêu cầu của người dùng trong DANH SÁCH LỊCH HIỆN CÓ ở trên và đưa chúng vào mảng "events" (giữ nguyên "id", "date", "title", và khung giờ của sự kiện đó) để ứng dụng xóa khỏi bảng danh sách lịch và hủy lịch thông báo (notification).
-3. Trường "date" của mỗi sự kiện trong mảng "events" BẮT BUỘC phải là ngày DƯƠNG LỊCH định dạng "YYYY-MM-DD".
-4. Chỉ để "events" là mảng rỗng [] khi người dùng chào hỏi xã giao mà hoàn toàn không yêu cầu thêm hoặc xóa lịch nào.
+QUY TẮC BẮT BUỘC:
+1. NẾU THÊM LỊCH: Đặt "action": "add". BẮT BUỘC tạo các sự kiện cụ thể trong mảng "events". Ngày trước mùng 1 là ngày liền trước ngày có Âm:01/MM; ngày trước rằm là ngày có Âm:14/MM. Nếu không nêu giờ cụ thể, tự chọn giờ hợp lý (VD sáng 08:00-09:00, chiều 14:00-16:00, tối 19:30-21:30) và né giờ bận.
+2. NẾU XÓA LỊCH (VD: "xóa các lịch mua đồ thắp hương", "xóa lịch ngày mai"): Đặt "action": "delete". Tìm đúng các sự kiện khớp yêu cầu trong DANH SÁCH LỊCH HIỆN CÓ và đưa vào mảng "events" (giữ nguyên "id", "date", "title") để ứng dụng xóa khỏi bảng danh sách và hủy thông báo.
+3. "date" phải là ngày DƯƠNG LỊCH "YYYY-MM-DD".
 
-ĐỊNH DẠNG ĐẦU RA BẮT BUỘC (JSON OBJECT HỢP LỆ, KHÔNG BỌC MARKDOWN):
+ĐỊNH DẠNG JSON BẮT BUỘC (KHÔNG BỌC MARKDOWN):
 {
   "action": "add | delete",
-  "reply": "Lời giải thích ngắn gọn về các lịch sắp thêm hoặc sắp xóa...",
-  "planTitle": "Tiêu đề ngắn gọn (VD: Kế hoạch nhắc mua đồ thắp hương / Danh sách lịch cần xóa)",
+  "reply": "Lời giải thích ngắn gọn...",
+  "planTitle": "Tiêu đề ngắn gọn",
   "events": [
     {
-      "id": "Giữ nguyên id từ [id: ...] nếu action là delete (hoặc để chuỗi rỗng nếu action là add)",
+      "id": "Giữ nguyên id nếu action=delete, để rỗng nếu action=add",
       "date": "YYYY-MM-DD",
       "startTime": "HH:mm",
       "endTime": "HH:mm",
-      "title": "Tên sự kiện / môn học",
-      "code": "Mã hoặc nhãn ngắn in hoa (VD: REMIND, STUDY, EXAM, WORK... tối đa 15 ký tự)",
-      "room": "Địa điểm / Phòng / Online (để chuỗi rỗng nếu không có)",
-      "teacher": "Ghi chú thêm (VD: Ngày 14/11 âm lịch - Trước rằm tháng 11)",
+      "title": "Tên sự kiện",
+      "code": "Mã ngắn (VD: REMIND, STUDY, EXAM...)",
+      "room": "Địa điểm / Phòng (hoặc chuỗi rỗng)",
+      "teacher": "Ghi chú thêm (hoặc chuỗi rỗng)",
       "color": "violet | amber | cyan | green | rose | blue"
     }
   ]

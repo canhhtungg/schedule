@@ -114,7 +114,7 @@ test('buildAiSystemPrompt includes reference date, calendar table with lunar dat
   const prompt = buildAiSystemPrompt('2026-11-19', [
     { id: 'ev-123', date: '2026-11-20', title: 'An toàn mạng', time: '13:00 – 15:30' },
   ])
-  assert.match(prompt, /2026-11-19 \(Thứ 5, Âm: 11\/10\)/)
+  assert.match(prompt, /2026-11-19\(T5,Âm:11\/10\)/)
   assert.match(prompt, /\[id: ev-123\] 2026-11-20 \(Thứ 6\) \| 13:00 – 15:30 \| An toàn mạng/)
 })
 
