@@ -230,7 +230,14 @@ function Schedule({ user, events: initialEvents, mode, onLogout, onEventsChange,
     return next
   })
   const save = (draft, editingId) => { updateEvents((current) => saveEvent(current, draft, editingId)); const date = parseDateKey(draft.date); if (date) selectDate(date) }
-  const saveBatch = (drafts) => { updateEvents((current) => saveEventsBatch(current, drafts)) }
+  const saveBatch = (drafts) => {
+    updateEvents((current) => saveEventsBatch(current, drafts))
+    if (Array.isArray(drafts) && drafts.length > 0) {
+      const sortedDates = drafts.map((item) => item?.date).filter(Boolean).sort()
+      const firstParsed = parseDateKey(sortedDates[0])
+      if (firstParsed) selectDate(firstParsed)
+    }
+  }
   const openCalendarAtDate = (dateStr) => {
     const parsed = parseDateKey(dateStr)
     if (parsed) selectDate(parsed)

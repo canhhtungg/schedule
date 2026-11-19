@@ -292,7 +292,22 @@ function PlanCard({
       <div className="ai-plan-footer">
         {committedCount ? (
           <div className="ai-commit-success">
-            <span>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</span>
+            <div className="ai-commit-summary">
+              <span>Đã thêm thành công <strong>{committedCount}</strong> sự kiện vào lịch học của bạn!</span>
+              <div className="ai-committed-dates">
+                {[...new Set(items.filter((i) => i.selected).map((i) => i.date))].sort().map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className="ai-date-jump-chip"
+                    onClick={() => onOpenCalendarDate(d)}
+                  >
+                    <Icon name="calendar" size={13} />
+                    {formatDisplayDate(d)}
+                  </button>
+                ))}
+              </div>
+            </div>
             {firstDate && (
               <button
                 type="button"
